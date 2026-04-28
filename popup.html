@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kueski Smart Widget</title>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- ==================== LOGIN VIEW ==================== -->
+    <div id="view-login" class="view active">
+      <div class="login-container">
+        <div class="login-brand">
+          <div class="logo-icon">🌱</div>
+          <h1>Bienvenido</h1>
+          <p class="login-subtitle">ACCEDE A TU ASISTENTE FINANCIERO</p>
+        </div>
+        <div class="login-card">
+          <div class="social-buttons">
+            <button class="social-btn"><span class="material-symbols-outlined">mail</span></button>
+            <button class="social-btn"><span class="material-symbols-outlined">smartphone</span></button>
+            <button class="social-btn"><span class="material-symbols-outlined">fingerprint</span></button>
+          </div>
+          <div class="divider"><span>O</span></div>
+          <div class="form-group">
+            <label>CORREO ELECTRÓNICO</label>
+            <input type="email" placeholder="usuario@email.com" id="login-email">
+          </div>
+          <div class="form-group">
+            <div class="label-row">
+              <label>CONTRASEÑA</label>
+              <a href="#" class="forgot-link">¿Olvidaste?</a>
+            </div>
+            <div class="input-wrapper">
+              <input type="password" placeholder="••••••••" id="login-password">
+              <button class="input-icon"><span class="material-symbols-outlined">visibility</span></button>
+            </div>
+          </div>
+          <button class="btn-primary" onclick="navigate('home')">INICIAR SESIÓN</button>
+        </div>
+        <p class="login-footer">¿Nuevo en Kueski? <a href="#" onclick="navigate('register')">Regístrate</a></p>
+      </div>
+    </div>
+
+    <!-- ==================== REGISTER VIEW ==================== -->
+    <div id="view-register" class="view">
+      <div class="login-container">
+        <div class="login-brand">
+          <div class="logo-icon">🌱</div>
+          <h1>Crear cuenta</h1>
+          <p class="login-subtitle">ÚNETE AL ASISTENTE FINANCIERO</p>
+        </div>
+        <div class="login-card">
+          <div class="form-group">
+            <label>NOMBRE COMPLETO</label>
+            <input type="text" placeholder="Tu nombre">
+          </div>
+          <div class="form-group">
+            <label>CORREO ELECTRÓNICO</label>
+            <input type="email" placeholder="usuario@email.com">
+          </div>
+          <div class="form-group">
+            <label>CONTRASEÑA</label>
+            <input type="password" placeholder="••••••••">
+          </div>
+          <div class="form-group">
+            <label>CONFIRMAR CONTRASEÑA</label>
+            <input type="password" placeholder="••••••••">
+          </div>
+          <button class="btn-primary" onclick="navigate('onboarding')">CREAR CUENTA</button>
+        </div>
+        <p class="login-footer">¿Ya tienes cuenta? <a href="#" onclick="navigate('login')">Inicia sesión</a></p>
+      </div>
+    </div>
+
+    <!-- ==================== ONBOARDING VIEW ==================== -->
+    <div id="view-onboarding" class="view">
+      <div class="onboarding-container">
+        <div class="onboarding-hero">
+          <div class="onboarding-icon">🎉</div>
+          <h1>¡Bienvenido a<br>Kueski Smart Widget!</h1>
+          <p>Tu asistente financiero personal que te acompaña mientras navegas.</p>
+        </div>
+        <div class="onboarding-features">
+          <div class="feature-item">
+            <span class="material-symbols-outlined feature-icon">local_offer</span>
+            <div>
+              <strong>Cupones automáticos</strong>
+              <p>Descuentos exclusivos en comercios afiliados</p>
+            </div>
+          </div>
+          <div class="feature-item">
+            <span class="material-symbols-outlined feature-icon">account_balance_wallet</span>
+            <div>
+              <strong>Tu saldo siempre visible</strong>
+              <p>Consulta cuánto tienes disponible al instante</p>
+            </div>
+          </div>
+          <div class="feature-item">
+            <span class="material-symbols-outlined feature-icon">storefront</span>
+            <div>
+              <strong>Detección de tiendas</strong>
+              <p>Sabemos cuándo estás en un comercio afiliado</p>
+            </div>
+          </div>
+        </div>
+        <button class="btn-primary" onclick="navigate('home')">COMENZAR</button>
+      </div>
+    </div>
+
+    <!-- ==================== MAIN APP SHELL (Home/Stores/Activity/Account) ==================== -->
+    <div id="view-app" class="view">
+      <!-- Top Header -->
+      <header class="app-header">
+        <div class="header-brand">
+          <span class="logo-small">🌱</span>
+          <span class="brand-name">Kueski</span>
+        </div>
+        <div class="header-actions">
+          <button class="icon-btn"><span class="material-symbols-outlined">notifications</span></button>
+          <button class="icon-btn"><span class="material-symbols-outlined">settings</span></button>
+        </div>
+      </header>
+
+      <!-- Tab Content -->
+      <main class="app-content" id="app-content">
+
+        <!-- ===== HOME TAB ===== -->
+        <div id="tab-home" class="tab active">
+          <!-- Hero Discount Card -->
+          <div class="discount-card" onclick="showCouponDetail('KUESKI20', '20% de descuento', 'Oferta exclusiva en tu próxima compra en tiendas afiliadas.', '31 de Dic 2026')">
+            <span class="discount-badge">OFERTA LIMITADA</span>
+            <h2 class="discount-amount">20% Descuento</h2>
+            <p class="discount-desc">Oferta exclusiva en tu próxima compra en tiendas afiliadas.</p>
+            <div class="discount-cta">Aplicar ahora <span class="material-symbols-outlined">arrow_forward</span></div>
+          </div>
+
+          <!-- Financial Overview -->
+          <div class="section-header">
+            <span class="section-label">RESUMEN FINANCIERO</span>
+            <span class="section-link">Detalles <span class="material-symbols-outlined tiny">trending_up</span></span>
+          </div>
+
+          <div class="balance-card">
+            <p class="balance-label">Saldo disponible</p>
+            <h3 class="balance-amount">$4,850.00</h3>
+            <p class="balance-status"><span class="material-symbols-outlined tiny">check_circle</span> Cuenta activa</p>
+          </div>
+
+          <div class="credit-card">
+            <div class="credit-top">
+              <div class="credit-info">
+                <div class="credit-icon-wrap">
+                  <span class="material-symbols-outlined">credit_card</span>
+                </div>
+                <div>
+                  <p class="credit-title">Uso de crédito</p>
+                  <p class="credit-sub">Salud buena</p>
+                </div>
+              </div>
+              <span class="credit-pct">64%</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" style="width:64%"></div></div>
+            <div class="credit-range">
+              <span>$0 Usado</span>
+              <span>$7,500 Límite</span>
+            </div>
+          </div>
+
+          <!-- Available Coupons -->
+          <div class="section-header">
+            <span class="section-label">CUPONES DISPONIBLES</span>
+            <span class="section-link" onclick="switchTab('stores')">Ver todos</span>
+          </div>
+
+          <div class="coupons-scroll">
+            <div class="coupon-mini" onclick="showCouponDetail('AMAZON15', '15% off', 'Válido en Amazon México en compras mayores a $500.', '15 de Jun 2026')">
+              <div class="coupon-mini-icon">🛒</div>
+              <div class="coupon-mini-info">
+                <strong>Amazon</strong>
+                <span>15% off</span>
+              </div>
+            </div>
+            <div class="coupon-mini" onclick="showCouponDetail('PRIVALIA10', '10% off', 'Descuento en toda la tienda Privalia.', '30 de Jun 2026')">
+              <div class="coupon-mini-icon">👗</div>
+              <div class="coupon-mini-info">
+                <strong>Privalia</strong>
+                <span>10% off</span>
+              </div>
+            </div>
+            <div class="coupon-mini" onclick="showCouponDetail('LIVERPOOL500', '$500 off', 'Cupón de $500 en compras mayores a $3,000.', '31 de Jul 2026')">
+              <div class="coupon-mini-icon">🏬</div>
+              <div class="coupon-mini-info">
+                <strong>Liverpool</strong>
+                <span>$500 off</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Featured Stores -->
+          <div class="section-header">
+            <span class="section-label">TIENDAS DESTACADAS</span>
+          </div>
+          <div class="stores-grid-mini">
+            <div class="store-chip" onclick="switchTab('stores')">
+              <div class="store-chip-icon">🛒</div>
+              <span>Amazon</span>
+            </div>
+            <div class="store-chip" onclick="switchTab('stores')">
+              <div class="store-chip-icon">👟</div>
+              <span>Nike</span>
+            </div>
+            <div class="store-chip" onclick="switchTab('stores')">
+              <div class="store-chip-icon">👗</div>
+              <span>Zara</span>
+            </div>
+            <div class="store-chip" onclick="switchTab('stores')">
+              <div class="store-chip-icon">💻</div>
+              <span>AT&T</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== STORES TAB ===== -->
+        <div id="tab-stores" class="tab">
+          <h2 class="tab-title">Explorar tiendas</h2>
+          <p class="tab-desc">Ofertas y pagos flexibles en tus tiendas favoritas.</p>
+
+          <div class="search-bar">
+            <span class="material-symbols-outlined">search</span>
+            <input type="text" placeholder="Buscar comercio..." id="store-search" oninput="filterStores()">
+          </div>
+
+          <div class="section-header">
+            <span class="section-label">CATEGORÍAS</span>
+          </div>
+          <div class="category-chips">
+            <button class="cat-chip active">Todas</button>
+            <button class="cat-chip">Moda</button>
+            <button class="cat-chip">Electrónica</button>
+            <button class="cat-chip">Hogar</button>
+            <button class="cat-chip">Deportes</button>
+          </div>
+
+          <div class="section-header">
+            <span class="section-label">TIENDAS AFILIADAS</span>
+            <span class="section-link">VER TODAS</span>
+          </div>
+
+          <div class="stores-list" id="stores-list">
+            <div class="store-row" data-name="amazon">
+              <div class="store-row-icon">🛒</div>
+              <div class="store-row-info">
+                <strong>Amazon México</strong>
+                <span>Hasta 15% off • Electrónica, Hogar</span>
+              </div>
+              <span class="material-symbols-outlined store-arrow">chevron_right</span>
+            </div>
+            <div class="store-row" data-name="liverpool">
+              <div class="store-row-icon">🏬</div>
+              <div class="store-row-info">
+                <strong>Liverpool</strong>
+                <span>$500 off • Moda, Hogar</span>
+              </div>
+              <span class="material-symbols-outlined store-arrow">chevron_right</span>
+            </div>
+            <div class="store-row" data-name="privalia">
+              <div class="store-row-icon">👗</div>
+              <div class="store-row-info">
+                <strong>Privalia</strong>
+                <span>10% off • Moda</span>
+              </div>
+              <span class="material-symbols-outlined store-arrow">chevron_right</span>
+            </div>
+            <div class="store-row" data-name="nike">
+              <div class="store-row-icon">👟</div>
+              <div class="store-row-info">
+                <strong>Nike</strong>
+                <span>20% off • Deportes</span>
+              </div>
+              <span class="material-symbols-outlined store-arrow">chevron_right</span>
+            </div>
+            <div class="store-row" data-name="att">
+              <div class="store-row-icon">📱</div>
+              <div class="store-row-info">
+                <strong>AT&T</strong>
+                <span>MSI disponible • Electrónica</span>
+              </div>
+              <span class="material-symbols-outlined store-arrow">chevron_right</span>
+            </div>
+            <div class="store-row" data-name="office depot">
+              <div class="store-row-icon">🖨️</div>
+              <div class="store-row-info">
+                <strong>Office Depot</strong>
+                <span>Cashback 5% • Oficina</span>
+              </div>
+              <span class="material-symbols-outlined store-arrow">chevron_right</span>
+            </div>
+            <div class="store-row" data-name="puma">
+              <div class="store-row-icon">🐆</div>
+              <div class="store-row-info">
+                <strong>Puma</strong>
+                <span>15% off • Deportes</span>
+              </div>
+              <span class="material-symbols-outlined store-arrow">chevron_right</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== ACTIVITY TAB ===== -->
+        <div id="tab-activity" class="tab">
+          <h2 class="tab-title">Actividad</h2>
+          <p class="tab-desc">Revisa tus compras y pagos recientes.</p>
+
+          <div class="search-bar">
+            <span class="material-symbols-outlined">search</span>
+            <input type="text" placeholder="Buscar transacción...">
+          </div>
+
+          <div class="stats-row">
+            <div class="stat-card stat-primary">
+              <span class="material-symbols-outlined stat-icon">payments</span>
+              <span class="stat-label">TOTAL GASTADO</span>
+              <span class="stat-value">$4,280.00</span>
+            </div>
+            <div class="stat-card stat-secondary">
+              <span class="material-symbols-outlined stat-icon">savings</span>
+              <span class="stat-label">AHORRO TOTAL</span>
+              <span class="stat-value">$876.50</span>
+            </div>
+          </div>
+
+          <div class="section-header">
+            <span class="section-label">TRANSACCIONES RECIENTES</span>
+          </div>
+
+          <div class="transactions-list">
+            <div class="transaction-row">
+              <div class="tx-icon">🛒</div>
+              <div class="tx-info">
+                <strong>Amazon México</strong>
+                <span>24 Abr 2026 • Crédito</span>
+              </div>
+              <div class="tx-amount">
+                <strong>$842.00</strong>
+                <span class="tx-status paid">PAGADO</span>
+              </div>
+            </div>
+            <div class="transaction-row">
+              <div class="tx-icon">👗</div>
+              <div class="tx-info">
+                <strong>Privalia</strong>
+                <span>20 Abr 2026 • Crédito</span>
+              </div>
+              <div class="tx-amount">
+                <strong>$1,269.50</strong>
+                <span class="tx-status pending">PENDIENTE</span>
+              </div>
+            </div>
+            <div class="transaction-row">
+              <div class="tx-icon">🏬</div>
+              <div class="tx-info">
+                <strong>Liverpool</strong>
+                <span>15 Abr 2026 • Crédito</span>
+              </div>
+              <div class="tx-amount">
+                <strong>$2,197.50</strong>
+                <span class="tx-status paid">PAGADO</span>
+              </div>
+            </div>
+            <div class="transaction-row">
+              <div class="tx-icon">👟</div>
+              <div class="tx-info">
+                <strong>Nike</strong>
+                <span>10 Abr 2026 • Crédito</span>
+              </div>
+              <div class="tx-amount">
+                <strong>$1,899.00</strong>
+                <span class="tx-status paid">PAGADO</span>
+              </div>
+            </div>
+            <div class="transaction-row">
+              <div class="tx-icon">📱</div>
+              <div class="tx-info">
+                <strong>AT&T</strong>
+                <span>5 Abr 2026 • Crédito</span>
+              </div>
+              <div class="tx-amount">
+                <strong>$599.00</strong>
+                <span class="tx-status pending">2 QUINCENAS</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== ACCOUNT TAB ===== -->
+        <div id="tab-account" class="tab">
+          <div class="account-profile">
+            <div class="avatar">ML</div>
+            <div class="profile-info">
+              <h3>Mariana López</h3>
+              <span class="member-badge">Miembro Premium</span>
+            </div>
+          </div>
+
+          <div class="section-header">
+            <span class="section-label">CRÉDITO DISPONIBLE</span>
+          </div>
+
+          <div class="credit-available-card">
+            <p class="balance-label">Crédito disponible</p>
+            <h3 class="balance-amount">$12,450.00</h3>
+            <div class="progress-bar"><div class="progress-fill" style="width:35%"></div></div>
+          </div>
+
+          <div class="credit-limit-row">
+            <div>
+              <span class="credit-limit-label">LÍMITE TOTAL</span>
+              <strong class="credit-limit-val">$45,000.00</strong>
+            </div>
+            <button class="btn-secondary">Solicitar aumento</button>
+          </div>
+
+          <div class="section-header">
+            <span class="section-label">CONTROLES DE CUENTA</span>
+          </div>
+
+          <div class="account-menu">
+            <div class="menu-item">
+              <span class="material-symbols-outlined">person</span>
+              <span>Datos personales</span>
+              <span class="material-symbols-outlined menu-arrow">chevron_right</span>
+            </div>
+            <div class="menu-item">
+              <span class="material-symbols-outlined">notifications</span>
+              <span>Notificaciones</span>
+              <span class="material-symbols-outlined menu-arrow">chevron_right</span>
+            </div>
+            <div class="menu-item">
+              <span class="material-symbols-outlined">category</span>
+              <span>Categorías de interés</span>
+              <span class="material-symbols-outlined menu-arrow">chevron_right</span>
+            </div>
+            <div class="menu-item">
+              <span class="material-symbols-outlined">security</span>
+              <span>Seguridad y privacidad</span>
+              <span class="material-symbols-outlined menu-arrow">chevron_right</span>
+            </div>
+            <div class="menu-item">
+              <span class="material-symbols-outlined">help</span>
+              <span>Ayuda y soporte</span>
+              <span class="material-symbols-outlined menu-arrow">chevron_right</span>
+            </div>
+            <div class="menu-item logout" onclick="navigate('login')">
+              <span class="material-symbols-outlined">logout</span>
+              <span>Cerrar sesión</span>
+              <span class="material-symbols-outlined menu-arrow">chevron_right</span>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- Bottom Navigation -->
+      <nav class="bottom-nav">
+        <button class="nav-item active" onclick="switchTab('home')">
+          <span class="material-symbols-outlined">home</span>
+          <span>Home</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('stores')">
+          <span class="material-symbols-outlined">storefront</span>
+          <span>Tiendas</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('activity')">
+          <span class="material-symbols-outlined">receipt_long</span>
+          <span>Actividad</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('account')">
+          <span class="material-symbols-outlined">person</span>
+          <span>Cuenta</span>
+        </button>
+      </nav>
+    </div>
+
+    <!-- ==================== COUPON DETAIL OVERLAY ==================== -->
+    <div id="coupon-overlay" class="overlay hidden">
+      <div class="overlay-card">
+        <div class="overlay-header">
+          <div class="header-brand">
+            <span class="logo-small">🌱</span>
+            <span class="brand-name">Kueski</span>
+          </div>
+          <button class="icon-btn" onclick="closeCouponDetail()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div class="coupon-detail-hero">
+          <p class="coupon-detail-label">Detalles del cupón</p>
+          <h2 class="coupon-detail-amount" id="cd-amount">25% off</h2>
+          <span class="coupon-detail-expiry" id="cd-expiry">📅 VÁLIDO HASTA EL 31 DE DIC</span>
+        </div>
+
+        <div class="coupon-code-box">
+          <span class="coupon-code" id="cd-code">KUESKINUEVO25</span>
+          <button class="btn-copy" onclick="copyCode()">Copiar</button>
+        </div>
+
+        <div class="coupon-tabs">
+          <button class="coupon-tab active">
+            <span class="material-symbols-outlined">shopping_cart</span> Online
+          </button>
+          <button class="coupon-tab">
+            <span class="material-symbols-outlined">store</span> En tienda
+          </button>
+        </div>
+
+        <div class="coupon-steps">
+          <div class="coupon-step">
+            <div class="step-number">1</div>
+            <div>
+              <strong>Selecciona tus productos</strong>
+              <p>Agrega tus artículos favoritos al carrito de compras en la tienda oficial.</p>
+            </div>
+          </div>
+          <div class="coupon-step">
+            <div class="step-number">2</div>
+            <div>
+              <strong>Elige Kueski Pay</strong>
+              <p>Al finalizar, selecciona Kueski Pay como tu método de pago preferido.</p>
+            </div>
+          </div>
+          <div class="coupon-step">
+            <div class="step-number">3</div>
+            <div>
+              <strong>Aplica el cupón</strong>
+              <p>Ingresa el código del cupón en el campo de descuento y disfruta tu ahorro.</p>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn-primary" onclick="closeCouponDetail()">Comprar en línea <span class="material-symbols-outlined tiny">arrow_forward</span></button>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
