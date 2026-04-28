@@ -151,7 +151,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     switch (action) {
       case 'navigate':
-        navigate(actionEl.dataset.view);
+        // If navigating to home from login, validate user first
+        if (actionEl.dataset.view === 'home') {
+          const email = document.getElementById('login-email').value.trim();
+          if (!email) {
+            alert('Ingresa tu correo electrónico');
+            return;
+          }
+          loginUser(email);
+        } else {
+          navigate(actionEl.dataset.view);
+        }
         break;
       case 'switch-tab':
         switchTab(actionEl.dataset.tab);
@@ -187,6 +197,28 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 });
+
+
+// Validate user exists in DB before letting them in
+async function loginUser(email) {
+  try {
+    const res = await fetch(`http://localhost:3000/api/cuenta?email=${email}`);
+    const data = await res.json();
+
+    if (!data.ok) {
+      alert('Usuario no encontrado. Usa ana.garcia@demo.com para la demo.');
+      return;
+    }
+
+    // User exists then: go to home
+    navigate('home');
+
+  } catch (err) {
+    console.error('Login error:', err);
+    alert('No se pudo conectar al servidor.');
+  }
+}
+
 
 // ===== CLOSE OVERLAY ON BACKDROP CLICK =====
 document.addEventListener('click', (e) => {
