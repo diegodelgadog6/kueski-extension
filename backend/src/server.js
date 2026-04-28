@@ -174,7 +174,7 @@ app.post('/api/transacciones', async (req, res) => {
   if (!email || !plan_id || !monto)
     return res.status(400).json({ ok: false, error: 'email, plan_id y monto son requeridos' });
 
-  const client = await db.connect();
+  const client = await db.pool.connect();
   try {
     await client.query('BEGIN');
     const cuentaRes = await client.query(`

@@ -59,7 +59,52 @@ function switchTab(tabName) {
 
   // Scroll to top
   document.getElementById('app-content').scrollTop = 0;
+
+  // Load real data when switching tabs from the DB
+  if (tabName === 'activity') loadActivityData();
+
 }
+
+// Fetch account + transactions from the backend for this user
+async function loadActivityData() {
+  const email = document.getElementById('login-email').value || 'ana.garcia@demo.com';
+  
+  try {
+    const res = await fetch(`http://localhost:3000/api/cuenta?email=${email}`);
+    const data = await res.json();
+    if (!data.ok) return;
+
+    const txs = data.ultimas_transacciones;
+    const list = document.querySelector('.transactions-list');
+
+    // No transactions yet — show empty state
+    if (txs.length === 0) {
+      list.innerHTML = '<p style="text-align:center;padding:1rem;opacity:0.5">Sin transacciones aún</p>';
+      return;
+    }
+
+    // Build a row for each transaction returned by the API
+    list.innerHTML = txs.map(tx => `
+      <div class="transaction-row">
+        <div class="tx-icon">🛒</div>
+        <div class="tx-info">
+          <strong>${tx.merchant || 'Kueski Pay'}</strong>
+          <span>${new Date(tx.created_at).toLocaleDateString('es-MX')} • Crédito</span>
+        </div>
+        <div class="tx-amount">
+          <strong>$${parseFloat(tx.total_amount).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</strong>
+          <span class="tx-status ${tx.status === 'completed' ? 'paid' : 'pending'}">
+            ${tx.status === 'authorized' ? tx.num_installments + ' QUINCENAS' : tx.status.toUpperCase()}
+          </span>
+        </div>
+      </div>
+    `).join('');
+
+  } catch (err) {
+    console.error('Error loading activity:', err);
+  }
+}
+
 
 // ===== COUPON DETAIL =====
 function showCouponDetail(code, amount, desc, expiry) {
