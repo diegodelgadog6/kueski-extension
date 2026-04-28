@@ -10,6 +10,12 @@
     (response) => {
       if (response && response.affiliated) {
         showKueskiBanner(response.merchant);
+        chrome.runtime.sendMessage({
+          type: 'LOG_ACTIVITY',
+          domain: currentDomain,
+          action: 'viewed_coupon',
+          details: `Banner mostrado para ${response.merchant.name}`
+        });
       }
     }
   );
@@ -43,6 +49,12 @@
     document.getElementById('kueski-copy-btn').addEventListener('click', () => {
       navigator.clipboard.writeText(merchant.coupon);
       document.getElementById('kueski-copy-btn').textContent = '¡Copiado!';
+      chrome.runtime.sendMessage({
+        type: 'LOG_ACTIVITY',
+        domain: currentDomain,
+        action: 'copied_coupon',
+        details: `Cupón ${merchant.coupon} copiado`
+      });
       setTimeout(() => {
         document.getElementById('kueski-copy-btn').textContent = 'Copiar código';
       }, 2000);

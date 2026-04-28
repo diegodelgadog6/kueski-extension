@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "description": "Tu asistente financiero inteligente. Cupones, saldo y más mientras navegas.",
   "permissions": ["activeTab", "storage", "notifications"],
+  "host_permissions": ["http://localhost:3000/*"],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {

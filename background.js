@@ -1,4 +1,5 @@
 // ===== KUESKI SMART WIDGET - SERVICE WORKER =====
+const API_BASE_URL = 'http://localhost:3000';
 
 // Simulated list of affiliated merchants (domains)
 const AFFILIATED_MERCHANTS = [
@@ -14,22 +15,93 @@ const AFFILIATED_MERCHANTS = [
   { domain: 'shein.com', name: 'Shein', coupon: 'SHEIN25', discount: '25% off' }
 ];
 
+async function checkMerchantFromApi(domain) {
+  const response = await fetch(
+    `${API_BASE_URL}/api/merchants/check?domain=${encodeURIComponent(domain)}`
+  );
+
+  if (!response.ok) {
+    throw new Error(`API error ${response.status}`);
+  }
+
+  return response.json();
+}
+
+function checkMerchantFallback(domain) {
+  const merchant = AFFILIATED_MERCHANTS.find(m => domain.includes(m.domain));
+
+  if (!merchant) {
+    return { affiliated: false };
+  }
+
+  return { affiliated: true, merchant };
+}
+
+async function logActivityToApi(payload) {
+  const response = await fetch(`${API_BASE_URL}/api/activity`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw new Error(`API error ${response.status}`);
+  }
+
+  return response.json();
+}
+
 // Listen for messages from content script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'CHECK_MERCHANT') {
-    const domain = message.domain;
-    const merchant = AFFILIATED_MERCHANTS.find(m => domain.includes(m.domain));
-    
-    if (merchant) {
-      // Change extension icon badge to show it's an affiliated store
-      chrome.action.setBadgeText({ text: '✓', tabId: sender.tab.id });
-      chrome.action.setBadgeBackgroundColor({ color: '#2ECC71', tabId: sender.tab.id });
-      sendResponse({ affiliated: true, merchant: merchant });
-    } else {
-      chrome.action.setBadgeText({ text: '', tabId: sender.tab.id });
-      sendResponse({ affiliated: false });
-    }
+    const domain = String(message.domain || '').toLowerCase();
+
+    (async () => {
+      try {
+        let result;
+
+        try {
+          result = await checkMerchantFromApi(domain);
+        } catch (_apiError) {
+          result = checkMerchantFallback(domain);
+        }
+
+        if (sender.tab && result.affiliated) {
+          chrome.action.setBadgeText({ text: '✓', tabId: sender.tab.id });
+          chrome.action.setBadgeBackgroundColor({ color: '#2ECC71', tabId: sender.tab.id });
+        } else if (sender.tab) {
+          chrome.action.setBadgeText({ text: '', tabId: sender.tab.id });
+        }
+
+        sendResponse(result);
+      } catch (_error) {
+        if (sender.tab) {
+          chrome.action.setBadgeText({ text: '', tabId: sender.tab.id });
+        }
+        sendResponse({ affiliated: false });
+      }
+    })();
   }
+
+  if (message.type === 'LOG_ACTIVITY') {
+    const payload = {
+      domain: String(message.domain || '').toLowerCase(),
+      action: String(message.action || '').trim(),
+      details: message.details || null
+    };
+
+    (async () => {
+      try {
+        await logActivityToApi(payload);
+        sendResponse({ ok: true });
+      } catch (_error) {
+        sendResponse({ ok: false });
+      }
+    })();
+  }
+
   return true;
 });
 
