@@ -61,6 +61,47 @@ function filterStores() {
 
 // ===== CATEGORY CHIP TOGGLE =====
 document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('click', (e) => {
+    const actionEl = e.target.closest('[data-action]');
+    if (!actionEl) return;
+
+    const action = actionEl.dataset.action;
+
+    if (actionEl.tagName === 'A') {
+      e.preventDefault();
+    }
+
+    switch (action) {
+      case 'navigate':
+        navigate(actionEl.dataset.view);
+        break;
+      case 'switch-tab':
+        switchTab(actionEl.dataset.tab);
+        break;
+      case 'coupon-detail':
+        showCouponDetail(
+          actionEl.dataset.code,
+          actionEl.dataset.amount,
+          actionEl.dataset.desc,
+          actionEl.dataset.expiry
+        );
+        break;
+      case 'close-coupon-detail':
+        closeCouponDetail();
+        break;
+      case 'copy-code':
+        copyCode();
+        break;
+      default:
+        break;
+    }
+  });
+
+  const storeSearch = document.getElementById('store-search');
+  if (storeSearch) {
+    storeSearch.addEventListener('input', filterStores);
+  }
+
   document.querySelectorAll('.cat-chip').forEach(chip => {
     chip.addEventListener('click', () => {
       document.querySelectorAll('.cat-chip').forEach(c => c.classList.remove('active'));

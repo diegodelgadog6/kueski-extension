@@ -40,9 +40,9 @@
               <button class="input-icon"><span class="material-symbols-outlined">visibility</span></button>
             </div>
           </div>
-          <button class="btn-primary" onclick="navigate('home')">INICIAR SESIÓN</button>
+          <button class="btn-primary" data-action="navigate" data-view="home">INICIAR SESIÓN</button>
         </div>
-        <p class="login-footer">¿Nuevo en Kueski? <a href="javascript:void(0)" onclick="navigate('register')">Regístrate</a></p>
+        <p class="login-footer">¿Nuevo en Kueski? <a href="#" data-action="navigate" data-view="register">Regístrate</a></p>
       </div>
     </div>
 
@@ -71,9 +71,9 @@
             <label>CONFIRMAR CONTRASEÑA</label>
             <input type="password" placeholder="••••••••">
           </div>
-          <button class="btn-primary" onclick="navigate('onboarding')">CREAR CUENTA</button>
+          <button class="btn-primary" data-action="navigate" data-view="onboarding">CREAR CUENTA</button>
         </div>
-        <p class="login-footer">¿Ya tienes cuenta? <a href="javascript:void(0)" onclick="navigate('login')">Inicia sesión</a></p>
+        <p class="login-footer">¿Ya tienes cuenta? <a href="#" data-action="navigate" data-view="login">Inicia sesión</a></p>
       </div>
     </div>
 
@@ -108,7 +108,7 @@
             </div>
           </div>
         </div>
-        <button class="btn-primary" onclick="navigate('home')">COMENZAR</button>
+        <button class="btn-primary" data-action="navigate" data-view="home">COMENZAR</button>
       </div>
     </div>
 
@@ -132,7 +132,7 @@
         <!-- ===== HOME TAB ===== -->
         <div id="tab-home" class="tab active">
           <!-- Hero Discount Card -->
-          <div class="discount-card" onclick="showCouponDetail('KUESKI20', '20% de descuento', 'Oferta exclusiva en tu próxima compra en tiendas afiliadas.', '31 de Dic 2026')">
+          <div class="discount-card" data-action="coupon-detail" data-code="KUESKI20" data-amount="20% de descuento" data-desc="Oferta exclusiva en tu próxima compra en tiendas afiliadas." data-expiry="31 de Dic 2026">
             <span class="discount-badge">OFERTA LIMITADA</span>
             <h2 class="discount-amount">20% Descuento</h2>
             <p class="discount-desc">Oferta exclusiva en tu próxima compra en tiendas afiliadas.</p>
@@ -174,25 +174,25 @@
           <!-- Available Coupons -->
           <div class="section-header">
             <span class="section-label">CUPONES DISPONIBLES</span>
-            <span class="section-link" onclick="switchTab('stores')">Ver todos</span>
+            <span class="section-link" data-action="switch-tab" data-tab="stores">Ver todos</span>
           </div>
 
           <div class="coupons-scroll">
-            <div class="coupon-mini" onclick="showCouponDetail('AMAZON15', '15% off', 'Válido en Amazon México en compras mayores a $500.', '15 de Jun 2026')">
+            <div class="coupon-mini" data-action="coupon-detail" data-code="AMAZON15" data-amount="15% off" data-desc="Válido en Amazon México en compras mayores a $500." data-expiry="15 de Jun 2026">
               <div class="coupon-mini-icon">🛒</div>
               <div class="coupon-mini-info">
                 <strong>Amazon</strong>
                 <span>15% off</span>
               </div>
             </div>
-            <div class="coupon-mini" onclick="showCouponDetail('PRIVALIA10', '10% off', 'Descuento en toda la tienda Privalia.', '30 de Jun 2026')">
+            <div class="coupon-mini" data-action="coupon-detail" data-code="PRIVALIA10" data-amount="10% off" data-desc="Descuento en toda la tienda Privalia." data-expiry="30 de Jun 2026">
               <div class="coupon-mini-icon">👗</div>
               <div class="coupon-mini-info">
                 <strong>Privalia</strong>
                 <span>10% off</span>
               </div>
             </div>
-            <div class="coupon-mini" onclick="showCouponDetail('LIVERPOOL500', '$500 off', 'Cupón de $500 en compras mayores a $3,000.', '31 de Jul 2026')">
+            <div class="coupon-mini" data-action="coupon-detail" data-code="LIVERPOOL500" data-amount="$500 off" data-desc="Cupón de $500 en compras mayores a $3,000." data-expiry="31 de Jul 2026">
               <div class="coupon-mini-icon">🏬</div>
               <div class="coupon-mini-info">
                 <strong>Liverpool</strong>
@@ -206,19 +206,19 @@
             <span class="section-label">TIENDAS DESTACADAS</span>
           </div>
           <div class="stores-grid-mini">
-            <div class="store-chip" onclick="switchTab('stores')">
+            <div class="store-chip" data-action="switch-tab" data-tab="stores">
               <div class="store-chip-icon">🛒</div>
               <span>Amazon</span>
             </div>
-            <div class="store-chip" onclick="switchTab('stores')">
+            <div class="store-chip" data-action="switch-tab" data-tab="stores">
               <div class="store-chip-icon">👟</div>
               <span>Nike</span>
             </div>
-            <div class="store-chip" onclick="switchTab('stores')">
+            <div class="store-chip" data-action="switch-tab" data-tab="stores">
               <div class="store-chip-icon">👗</div>
               <span>Zara</span>
             </div>
-            <div class="store-chip" onclick="switchTab('stores')">
+            <div class="store-chip" data-action="switch-tab" data-tab="stores">
               <div class="store-chip-icon">💻</div>
               <span>AT&T</span>
             </div>
@@ -232,7 +232,7 @@
 
           <div class="search-bar">
             <span class="material-symbols-outlined">search</span>
-            <input type="text" placeholder="Buscar comercio..." id="store-search" oninput="filterStores()">
+            <input type="text" placeholder="Buscar comercio..." id="store-search">
           </div>
 
           <div class="section-header">
@@ -455,7 +455,7 @@
               <span>Ayuda y soporte</span>
               <span class="material-symbols-outlined menu-arrow">chevron_right</span>
             </div>
-            <div class="menu-item logout" onclick="navigate('login')">
+            <div class="menu-item logout" data-action="navigate" data-view="login">
               <span class="material-symbols-outlined">logout</span>
               <span>Cerrar sesión</span>
               <span class="material-symbols-outlined menu-arrow">chevron_right</span>
@@ -466,19 +466,19 @@
 
       <!-- Bottom Navigation -->
       <nav class="bottom-nav">
-        <button class="nav-item active" onclick="switchTab('home')">
+        <button class="nav-item active" data-action="switch-tab" data-tab="home">
           <span class="material-symbols-outlined">home</span>
           <span>Home</span>
         </button>
-        <button class="nav-item" onclick="switchTab('stores')">
+        <button class="nav-item" data-action="switch-tab" data-tab="stores">
           <span class="material-symbols-outlined">storefront</span>
           <span>Tiendas</span>
         </button>
-        <button class="nav-item" onclick="switchTab('activity')">
+        <button class="nav-item" data-action="switch-tab" data-tab="activity">
           <span class="material-symbols-outlined">receipt_long</span>
           <span>Actividad</span>
         </button>
-        <button class="nav-item" onclick="switchTab('account')">
+        <button class="nav-item" data-action="switch-tab" data-tab="account">
           <span class="material-symbols-outlined">person</span>
           <span>Cuenta</span>
         </button>
@@ -493,7 +493,7 @@
             <span class="logo-small">🌱</span>
             <span class="brand-name">Kueski</span>
           </div>
-          <button class="icon-btn" onclick="closeCouponDetail()">
+          <button class="icon-btn" data-action="close-coupon-detail">
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -506,7 +506,7 @@
 
         <div class="coupon-code-box">
           <span class="coupon-code" id="cd-code">KUESKINUEVO25</span>
-          <button class="btn-copy" onclick="copyCode()">Copiar</button>
+          <button class="btn-copy" data-action="copy-code">Copiar</button>
         </div>
 
         <div class="coupon-tabs">
@@ -542,7 +542,7 @@
           </div>
         </div>
 
-        <button class="btn-primary" onclick="closeCouponDetail()">Comprar en línea <span class="material-symbols-outlined tiny">arrow_forward</span></button>
+        <button class="btn-primary" data-action="close-coupon-detail">Comprar en línea <span class="material-symbols-outlined tiny">arrow_forward</span></button>
       </div>
     </div>
 
