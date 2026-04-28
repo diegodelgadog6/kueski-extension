@@ -5,9 +5,42 @@ function navigate(viewName) {
   if (['home', 'stores', 'activity', 'account'].includes(viewName)) {
     document.getElementById('view-app').classList.add('active');
     switchTab(viewName);
+    loadAccountData(); // Load account data when navigating to app views
   } else {
     const view = document.getElementById('view-' + viewName);
     if (view) view.classList.add('active');
+  }
+}
+
+// Load real account data from the API 
+async function loadAccountData() {
+  const email = document.getElementById('login-email').value || 'ana.garcia@demo.com';
+  try {
+    const res = await fetch(`http://localhost:3000/api/cuenta?email=${email}`);
+    const data = await res.json();
+    if (!data.ok) return;
+
+    const c = data.cuenta;
+
+    // Update balance
+    document.querySelector('.balance-amount').textContent =
+      '$' + parseFloat(c.available_balance).toLocaleString('es-MX', { minimumFractionDigits: 2 });
+
+    // Update credit card bar
+    const usedPct = Math.round((parseFloat(c.used_balance) / parseFloat(c.credit_limit)) * 100);
+    document.querySelector('.credit-pct').textContent = usedPct + '%';
+    document.querySelector('.progress-fill').style.width = usedPct + '%';
+    document.querySelector('.credit-range span:first-child').textContent =
+      '$' + parseFloat(c.used_balance).toLocaleString('es-MX') + ' Usado';
+    document.querySelector('.credit-range span:last-child').textContent =
+      '$' + parseFloat(c.credit_limit).toLocaleString('es-MX') + ' Límite';
+
+    // Update account tab
+    document.querySelector('.balance-amount + .progress-bar + div strong, .credit-limit-val').textContent =
+      '$' + parseFloat(c.credit_limit).toLocaleString('es-MX', { minimumFractionDigits: 2 });
+
+  } catch (err) {
+    console.error('Error loading account data:', err);
   }
 }
 
