@@ -235,6 +235,28 @@ async function loadCurrentSiteCoupon() {
   }
 }
 
+// ===== STORE URLS MAPPING =====
+const storeUrls = {
+  'amazon': 'https://www.amazon.com.mx',
+  'liverpool': 'https://www.liverpool.com.mx',
+  'privalia': 'https://www.privalia.com.mx',
+  'nike': 'https://www.nike.com',
+  'zara': 'https://www.zara.com',
+  'att': 'https://www.att.com.mx',
+  'office depot': 'https://www.officedepot.com.mx',
+  'puma': 'https://www.puma.com',
+  'adidas': 'https://www.adidas.com.mx',
+  'shein': 'https://www.shein.com'
+};
+
+// ===== OPEN STORE IN NEW TAB =====
+function openStore(storeName) {
+  const url = storeUrls[storeName.toLowerCase()];
+  if (url) {
+    chrome.tabs.create({ url: url });
+  }
+}
+
 // ===== COUPON DETAIL =====
 function showCouponDetail(code, amount, desc, expiry) {
   document.getElementById("cd-code").textContent = code;
@@ -377,6 +399,30 @@ document.addEventListener("DOMContentLoaded", () => {
         .querySelectorAll(".cat-chip")
         .forEach((c) => c.classList.remove("active"));
       chip.classList.add("active");
+    });
+  });
+});
+
+// ===== OPEN STORE ON CLICK (store-rows and store-chips) =====
+document.addEventListener("DOMContentLoaded", () => {
+  // Store rows (lista de tiendas con detalles)
+  document.querySelectorAll(".store-row").forEach((row) => {
+    row.style.cursor = "pointer";
+    row.addEventListener("click", () => {
+      const storeName = row.getAttribute("data-name");
+      openStore(storeName);
+    });
+  });
+
+  // Store chips (tiendas destacadas)
+  document.querySelectorAll(".store-chip").forEach((chip) => {
+    const storeName = chip.querySelector("span").textContent.toLowerCase();
+    chip.style.cursor = "pointer";
+    // Prevent switch-tab action and open store instead
+    chip.removeAttribute("data-action");
+    chip.removeAttribute("data-tab");
+    chip.addEventListener("click", () => {
+      openStore(storeName);
     });
   });
 });
