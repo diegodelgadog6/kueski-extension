@@ -174,8 +174,9 @@ app.post('/api/transacciones', async (req, res) => {
   if (!email || !plan_id || !monto)
     return res.status(400).json({ ok: false, error: 'email, plan_id y monto son requeridos' });
 
-  const client = await db.pool.connect();
+  let client;
   try {
+    client = await db.pool.connect();
     await client.query('BEGIN');
     const cuentaRes = await client.query(`
       SELECT ka.* FROM kueski_accounts ka
@@ -258,10 +259,14 @@ app.post('/api/transacciones', async (req, res) => {
       }
     });
   } catch (err) {
-    await client.query('ROLLBACK');
+    if (client) {
+      await client.query('ROLLBACK');
+    }
     res.status(500).json({ ok: false, error: err.message });
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 });
 
@@ -271,8 +276,9 @@ app.post('/api/register', async (req, res) => {
   if (!name || !email)
     return res.status(400).json({ ok: false, error: 'name and email are required' });
 
-  const client = await db.pool.connect();
+  let client;
   try {
+    client = await db.pool.connect();
     await client.query('BEGIN');
 
     // Check if email already exists
@@ -301,10 +307,14 @@ app.post('/api/register', async (req, res) => {
     res.status(201).json({ ok: true, user: { id: user.id, name: user.name, email: user.email } });
 
   } catch (err) {
-    await client.query('ROLLBACK');
+    if (client) {
+      await client.query('ROLLBACK');
+    }
     res.status(500).json({ ok: false, error: err.message });
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 });
 
