@@ -106,6 +106,4 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // On extension install
-chrome.runtime.onInstalled.addListener(() => {
-  console.log('Kueski Smart Widget installed successfully');
-});
+// chrome.runtime.onInstalled: no-op in production; keep commented for future setup hooks

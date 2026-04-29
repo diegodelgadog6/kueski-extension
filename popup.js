@@ -401,28 +401,25 @@ document.addEventListener("DOMContentLoaded", () => {
       chip.classList.add("active");
     });
   });
-});
-
-// ===== OPEN STORE ON CLICK (store-rows and store-chips) =====
-document.addEventListener("DOMContentLoaded", () => {
-  // Store rows (lista de tiendas con detalles)
+  // Add clickable behavior for store rows
   document.querySelectorAll(".store-row").forEach((row) => {
     row.style.cursor = "pointer";
-    row.addEventListener("click", () => {
+    row.addEventListener("click", (e) => {
+      e.stopPropagation();
       const storeName = row.getAttribute("data-name");
       openStore(storeName);
     });
   });
 
-  // Store chips (tiendas destacadas)
+  // Add clickable behavior for store chips (featured stores)
   document.querySelectorAll(".store-chip").forEach((chip) => {
-    const storeName = chip.querySelector("span").textContent.toLowerCase();
+    const span = chip.querySelector("span");
+    const storeName = span ? span.textContent.toLowerCase() : null;
     chip.style.cursor = "pointer";
-    // Prevent switch-tab action and open store instead
-    chip.removeAttribute("data-action");
-    chip.removeAttribute("data-tab");
-    chip.addEventListener("click", () => {
-      openStore(storeName);
+    chip.addEventListener("click", (e) => {
+      // Prevent global delegation from also handling this click
+      e.stopPropagation();
+      if (storeName) openStore(storeName);
     });
   });
 });
