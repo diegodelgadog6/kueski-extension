@@ -111,3 +111,10 @@ JOIN merchants m ON m.domain = seed.domain
 WHERE NOT EXISTS (
   SELECT 1 FROM coupons c WHERE c.merchant_id = m.id AND c.code = seed.code
 );
+
+INSERT INTO payment_plans (name, num_installments, interest_rate, active)
+VALUES
+  ('3 quincenas', 3, 0.00, TRUE),
+  ('6 quincenas', 6, 0.08, TRUE),
+  ('12 quincenas', 12, 0.16, TRUE)
+ON CONFLICT DO NOTHING;
