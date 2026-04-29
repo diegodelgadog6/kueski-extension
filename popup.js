@@ -95,7 +95,7 @@ async function loadAccountData() {
   }
 
   loadCurrentSiteCoupon();
-  
+
 }
 
 // Fetch account + transactions from the backend for this user
@@ -311,14 +311,20 @@ document.addEventListener("DOMContentLoaded", () => {
       case "switch-tab":
         switchTab(actionEl.dataset.tab);
         break;
-      case "coupon-detail":
-        showCouponDetail(
-          actionEl.dataset.code,
-          actionEl.dataset.amount,
-          actionEl.dataset.desc,
-          actionEl.dataset.expiry
-        );
-        break;
+        case 'coupon-detail':
+          // Hero card on affiliated site opens checkout flow
+          // Mini coupons open the regular coupon detail overlay
+          if (actionEl.closest('.discount-card')) {
+            openCheckout();
+          } else {
+            showCouponDetail(
+              actionEl.dataset.code,
+              actionEl.dataset.amount,
+              actionEl.dataset.desc,
+              actionEl.dataset.expiry
+            );
+          }
+          break;
       case "close-coupon-detail":
         closeCouponDetail();
         break;
@@ -326,13 +332,35 @@ document.addEventListener("DOMContentLoaded", () => {
         copyCode();
         break;
 
-        // Clear session and return to login
+      // Clear session and return to login
       case 'logout':
         currentUserEmail = null;
         chrome.storage.local.remove('userEmail');
         navigate('login');
         break;
-        
+
+      // Hide checkout overlay and refresh balance
+      case 'close-checkout':
+        document.getElementById('checkout-overlay').classList.add('hidden');
+        loadAccountData();
+        break;
+
+      // Move to plan selection step
+      case 'checkout-next':
+        checkoutNext();
+        break;
+
+      // Go back to amount entry step
+      case 'checkout-back':
+        document.getElementById('checkout-step-2').style.display = 'none';
+        document.getElementById('checkout-step-1').style.display = 'block';
+        break;
+
+      // Confirm payment and save to DB
+      case 'checkout-confirm':
+        checkoutConfirm();
+        break;
+              
       default:
         break;
     }
@@ -397,6 +425,156 @@ async function registerUser(name, email) {
   } catch (err) {
     console.error('Register error:', err);
     alert('No se pudo conectar al servidor.');
+  }
+}
+
+// Tracks current checkout session data
+let checkoutState = { domain: '', merchantName: '', couponCode: '', planId: null };
+
+//  Open Kueski Pay Checkout Step 1
+async function openCheckout() {
+  try {
+    // Get domain of current site
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const domain = new URL(tab.url).hostname.replace('www.', '');
+
+    const res = await fetch(`http://localhost:3000/api/merchants/check?domain=${domain}`);
+    const data = await res.json();
+
+    if (!data.affiliated) return;
+
+    // Save for use when confirming transaction
+    checkoutState.domain = domain;
+    checkoutState.merchantName = data.merchant.name;
+    checkoutState.couponCode = data.merchant.coupon;
+
+    document.getElementById('checkout-merchant').textContent = data.merchant.name;
+    document.getElementById('checkout-coupon-info').style.display = 'block';
+    document.getElementById('checkout-coupon-code').textContent = data.merchant.coupon;
+    document.getElementById('checkout-coupon-discount').textContent = data.merchant.discount;
+
+    // Reset to step 1 in case user opened it before
+    document.getElementById('checkout-step-1').style.display = 'block';
+    document.getElementById('checkout-step-2').style.display = 'none';
+    document.getElementById('checkout-step-3').style.display = 'none';
+    document.getElementById('checkout-amount').value = '';
+
+    document.getElementById('checkout-overlay').classList.remove('hidden');
+  } catch (err) {
+    console.error('Error opening checkout:', err);
+  }
+}
+
+// Checkout Step 2 : Show Payment Plans
+async function checkoutNext() {
+  const amount = parseFloat(document.getElementById('checkout-amount').value);
+  if (!amount || amount <= 0) {
+    alert('Ingresa un monto válido');
+    return;
+  }
+
+  // Fetch plans and validate coupon from API
+  const planesRes = await fetch('http://localhost:3000/api/planes');
+  const planesData = await planesRes.json();
+
+  const couponRes = await fetch(`http://localhost:3000/api/cupones/check?codigo=${checkoutState.couponCode}&domain=${checkoutState.domain}`);
+  const couponData = await couponRes.json();
+
+  // Calculate discount — handles both % and fixed amount coupons
+  let discount = 0;
+  if (couponData.valido) {
+    const pct = couponData.cupon.discount.match(/(\d+(\.\d+)?)\s*%/);
+    const fixed = couponData.cupon.discount.match(/\$\s*(\d+(\.\d+)?)/);
+    if (pct) discount = amount * (parseFloat(pct[1]) / 100);
+    if (fixed) discount = parseFloat(fixed[1]);
+    discount = Math.min(discount, amount);
+  }
+
+  const total = amount - discount;
+
+  document.getElementById('checkout-total').textContent =
+    '$' + total.toLocaleString('es-MX', { minimumFractionDigits: 2 });
+  document.getElementById('checkout-savings').textContent =
+    discount > 0 ? '🎉 Ahorraste $' + discount.toLocaleString('es-MX', { minimumFractionDigits: 2 }) : '';
+
+  // Build plan cards showing per-quincena amount
+  const plansDiv = document.getElementById('plan-options');
+  plansDiv.innerHTML = planesData.planes.map(plan => {
+    const planTotal = total * (1 + parseFloat(plan.interest_rate));
+    const perInst = planTotal / plan.num_installments;
+    return `
+      <div class="plan-option" data-plan-id="${plan.id}"
+           style="border:2px solid #e0e0e0;border-radius:12px;padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <p style="font-weight:700;margin:0">${plan.name}</p>
+          <p style="font-size:12px;color:#666;margin:2px 0 0">${plan.interest_rate > 0 ? parseFloat((plan.interest_rate * 100).toFixed(2)) + '% interés' : 'Sin interés'}</p>
+        </div>
+        <div style="text-align:right">
+          <p style="font-weight:800;color:#1a1a2e;margin:0">$${parseFloat(perInst.toFixed(2)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+          <p style="font-size:11px;color:#666;margin:0">por quincena</p>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Let user click a plan to select it
+  plansDiv.querySelectorAll('.plan-option').forEach(el => {
+    el.addEventListener('click', () => {
+      plansDiv.querySelectorAll('.plan-option').forEach(p => p.style.border = '2px solid #e0e0e0');
+      el.style.border = '2px solid #0a7a4b';
+      checkoutState.planId = parseInt(el.dataset.planId);
+    });
+  });
+
+  // Auto-select first plan by default
+  if (planesData.planes.length > 0) {
+    plansDiv.querySelector('.plan-option').style.border = '2px solid #0a7a4b';
+    checkoutState.planId = planesData.planes[0].id;
+  }
+
+  document.getElementById('checkout-step-1').style.display = 'none';
+  document.getElementById('checkout-step-2').style.display = 'block';
+}
+
+// Checkout step 3 : Confirm and save to DB 
+async function checkoutConfirm() {
+  if (!checkoutState.planId) {
+    alert('Selecciona un plan de pago');
+    return;
+  }
+
+  const amount = parseFloat(document.getElementById('checkout-amount').value);
+
+  try {
+    // Send transaction to backend : saves to DB and updates balance
+    const res = await fetch('http://localhost:3000/api/transacciones', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: currentUserEmail,
+        plan_id: checkoutState.planId,
+        monto: amount,
+        domain: checkoutState.domain,
+        coupon_code: checkoutState.couponCode
+      })
+    });
+    const data = await res.json();
+
+    if (!data.ok) {
+      alert(data.error || 'Error al procesar el pago');
+      return;
+    }
+
+    // Show success screen with payment summary
+    const tx = data.transaccion;
+    document.getElementById('checkout-success-msg').textContent =
+      `$${parseFloat(tx.total_amount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} en ${tx.num_installments} quincenas de $${parseFloat(tx.amount_per_installment).toLocaleString('es-MX', { minimumFractionDigits: 2 })} cada una.`;
+
+    document.getElementById('checkout-step-2').style.display = 'none';
+    document.getElementById('checkout-step-3').style.display = 'block';
+
+  } catch (err) {
+    alert('Error de conexión');
+    console.error(err);
   }
 }
 
