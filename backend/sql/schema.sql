@@ -31,6 +31,53 @@ CREATE TABLE IF NOT EXISTS user_activity (
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS kueski_accounts (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  account_number VARCHAR(40) UNIQUE NOT NULL DEFAULT ('KSK-' || floor(random() * 1000000000)::text),
+  credit_limit NUMERIC(12,2) NOT NULL DEFAULT 0,
+  available_balance NUMERIC(12,2) NOT NULL DEFAULT 0,
+  used_balance NUMERIC(12,2) NOT NULL DEFAULT 0,
+  credit_score INTEGER NOT NULL DEFAULT 650,
+  status VARCHAR(20) NOT NULL DEFAULT 'active',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS payment_plans (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(60) NOT NULL,
+  num_installments INTEGER NOT NULL,
+  interest_rate NUMERIC(8,4) NOT NULL DEFAULT 0,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS transactions (
+  id SERIAL PRIMARY KEY,
+  account_id INTEGER NOT NULL REFERENCES kueski_accounts(id) ON DELETE CASCADE,
+  plan_id INTEGER NOT NULL REFERENCES payment_plans(id),
+  coupon_id INTEGER REFERENCES coupons(id) ON DELETE SET NULL,
+  merchant_id INTEGER REFERENCES merchants(id) ON DELETE SET NULL,
+  original_amount NUMERIC(12,2) NOT NULL,
+  discount_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  total_amount NUMERIC(12,2) NOT NULL,
+  amount_per_installment NUMERIC(12,2) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'authorized',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS installments (
+  id SERIAL PRIMARY KEY,
+  transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+  installment_no INTEGER NOT NULL,
+  amount NUMERIC(12,2) NOT NULL,
+  due_date DATE NOT NULL,
+  paid_at TIMESTAMP,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  UNIQUE(transaction_id, installment_no)
+);
+
 INSERT INTO merchants (domain, name, active)
 VALUES
   ('amazon.com.mx', 'Amazon México', TRUE),
