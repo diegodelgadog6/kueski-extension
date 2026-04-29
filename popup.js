@@ -72,9 +72,9 @@ async function loadAccountData() {
       });
 
     // Update credit card bar
-    const usedPct = Math.round(
-      (parseFloat(c.used_balance) / parseFloat(c.credit_limit)) * 100
-    );
+    const usedPct = parseFloat(c.credit_limit) > 0
+  ? Math.round((parseFloat(c.used_balance) / parseFloat(c.credit_limit)) * 100)
+  : 0;
     document.querySelector(".credit-pct").textContent = usedPct + "%";
     document.querySelector(".progress-fill").style.width = usedPct + "%";
     document.querySelector(".credit-range span:first-child").textContent =
