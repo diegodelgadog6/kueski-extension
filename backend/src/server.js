@@ -149,7 +149,7 @@ app.post('/api/prestamo-demo', async (req, res) => {
     const transactionResult = await client.query(`
       INSERT INTO transactions
         (account_id, plan_id, merchant_id, original_amount, discount_amount, total_amount, amount_per_installment, status)
-      VALUES ($1, $2, NULL, $3, 0, $3, $3, 'loaned')
+      VALUES ($1, $2, NULL, $3, 0, $3, $3, 'authorized')
       RETURNING id, created_at
     `, [account.id, planId, parsedAmount.toFixed(2)]);
 
@@ -347,7 +347,7 @@ app.post('/api/transacciones', async (req, res) => {
   }
 });
 
-// ── Register a new user and create their Kueski account ───────
+//  Register a new user and create their Kueski account
 app.post('/api/register', async (req, res) => {
   const { name, email } = req.body;
   if (!name || !email)
