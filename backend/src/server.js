@@ -151,9 +151,9 @@ app.get('/api/cuenta', async (req, res) => {
     if (cuenta.rows.length === 0)
       return res.status(404).json({ ok: false, error: 'Usuario no encontrado' });
     const txs = await db.query(`
-      SELECT t.id, t.total_amount, t.amount_per_installment,
-             pp.num_installments, t.status, t.created_at,
-             m.name AS merchant
+      SELECT t.id, t.total_amount, t.original_amount, t.discount_amount,
+              t.amount_per_installment, pp.num_installments, t.status, t.created_at,
+              m.name AS merchant
       FROM transactions t
       JOIN kueski_accounts ka ON ka.id = t.account_id
       JOIN users u            ON u.id  = ka.user_id

@@ -108,6 +108,16 @@ async function loadActivityData() {
     const txs = data.ultimas_transacciones;
     const list = document.querySelector(".transactions-list");
 
+    // Calculate real totals from DB transactions
+    const totalSpent = txs.reduce((sum, tx) => sum + parseFloat(tx.total_amount), 0);
+    const totalSaved = txs.reduce((sum, tx) => sum + parseFloat(tx.discount_amount || 0), 0);
+
+    // Update stat cards with real data
+    document.querySelector('.stat-card.stat-primary .stat-value').textContent =
+      '$' + totalSpent.toLocaleString('es-MX', { minimumFractionDigits: 2 });
+    document.querySelector('.stat-card.stat-secondary .stat-value').textContent =
+      '$' + totalSaved.toLocaleString('es-MX', { minimumFractionDigits: 2 });
+
     // No transactions yet — show empty state
     if (txs.length === 0) {
       list.innerHTML =
