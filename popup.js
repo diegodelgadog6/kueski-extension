@@ -1,3 +1,15 @@
+// Track the currently logged-in user
+let currentUserEmail = null;
+
+// Restore session when popup opens
+chrome.storage.local.get('userEmail', (result) => {
+  if (result.userEmail) {
+    currentUserEmail = result.userEmail;
+    navigate('home');
+  }
+});
+
+
 // ===== VIEW NAVIGATION =====
 function navigate(viewName) {
   document
@@ -14,10 +26,37 @@ function navigate(viewName) {
   }
 }
 
+// ===== TAB SWITCHING =====
+function switchTab(tabName) {
+  document
+    .querySelectorAll(".tab")
+    .forEach((t) => t.classList.remove("active"));
+  document
+    .querySelectorAll(".nav-item")
+    .forEach((n) => n.classList.remove("active"));
+
+  const tab = document.getElementById("tab-" + tabName);
+  if (tab) tab.classList.add("active");
+
+  const navItems = document.querySelectorAll(".nav-item");
+  const tabOrder = ["home", "stores", "activity", "account"];
+  const idx = tabOrder.indexOf(tabName);
+  if (idx >= 0 && navItems[idx]) navItems[idx].classList.add("active");
+
+  // Scroll to top
+  document.getElementById("app-content").scrollTop = 0;
+
+  // Load real data when switching tabs from the DB
+  if (tabName === "activity") loadActivityData();
+  if (tabName === "account") loadAccountTab();
+}
+
+
 // Load real account data from the API
 async function loadAccountData() {
-  const email =
-    document.getElementById("login-email").value || "ana.garcia@demo.com";
+  const email = currentUserEmail;
+  if (!email) return;
+
   try {
     const res = await fetch(`http://localhost:3000/api/cuenta?email=${email}`);
     const data = await res.json();
@@ -56,34 +95,10 @@ async function loadAccountData() {
   }
 }
 
-// ===== TAB SWITCHING =====
-function switchTab(tabName) {
-  document
-    .querySelectorAll(".tab")
-    .forEach((t) => t.classList.remove("active"));
-  document
-    .querySelectorAll(".nav-item")
-    .forEach((n) => n.classList.remove("active"));
-
-  const tab = document.getElementById("tab-" + tabName);
-  if (tab) tab.classList.add("active");
-
-  const navItems = document.querySelectorAll(".nav-item");
-  const tabOrder = ["home", "stores", "activity", "account"];
-  const idx = tabOrder.indexOf(tabName);
-  if (idx >= 0 && navItems[idx]) navItems[idx].classList.add("active");
-
-  // Scroll to top
-  document.getElementById("app-content").scrollTop = 0;
-
-  // Load real data when switching tabs from the DB
-  if (tabName === "activity") loadActivityData();
-}
-
 // Fetch account + transactions from the backend for this user
 async function loadActivityData() {
-  const email =
-    document.getElementById("login-email").value || "ana.garcia@demo.com";
+  const email = currentUserEmail;
+  if (!email) return;
 
   try {
     const res = await fetch(`http://localhost:3000/api/cuenta?email=${email}`);
@@ -132,6 +147,42 @@ async function loadActivityData() {
       .join("");
   } catch (err) {
     console.error("Error loading activity:", err);
+  }
+}
+
+//  Load real user info into the account tab 
+async function loadAccountTab() {
+  const email = currentUserEmail;
+  if (!email) return;
+
+  try {
+    const res = await fetch(`http://localhost:3000/api/cuenta?email=${email}`);
+    const data = await res.json();
+    if (!data.ok) return;
+
+    const c = data.cuenta;
+
+    // Update name and initials avatar
+    const initials = c.name.split(' ').map(p => p[0]).join('').substring(0, 2).toUpperCase();
+    document.querySelector('.avatar').textContent = initials;
+    document.querySelector('.profile-info h3').textContent = c.name;
+
+    // Update credit available
+    document.querySelector('.credit-available-card .balance-amount').textContent =
+      '$' + parseFloat(c.available_balance).toLocaleString('es-MX', { minimumFractionDigits: 2 });
+
+    // Update credit limit
+    document.querySelector('.credit-limit-val').textContent =
+      '$' + parseFloat(c.credit_limit).toLocaleString('es-MX', { minimumFractionDigits: 2 });
+
+    // Update progress bar
+    const usedPct = c.credit_limit > 0
+      ? Math.round((parseFloat(c.used_balance) / parseFloat(c.credit_limit)) * 100)
+      : 0;
+    document.querySelector('#tab-account .progress-fill').style.width = usedPct + '%';
+
+  } catch (err) {
+    console.error('Error loading account tab:', err);
   }
 }
 
@@ -225,6 +276,14 @@ document.addEventListener("DOMContentLoaded", () => {
       case "copy-code":
         copyCode();
         break;
+
+        // Clear session and return to login
+      case 'logout':
+        currentUserEmail = null;
+        chrome.storage.local.remove('userEmail');
+        navigate('login');
+        break;
+        
       default:
         break;
     }
@@ -256,7 +315,9 @@ async function loginUser(email) {
       return;
     }
 
-    // User exists then: go to home
+    // Save logged in user and go to home
+    currentUserEmail = email;
+    chrome.storage.local.set({ userEmail: email }); // Persist session
     navigate("home");
   } catch (err) {
     console.error("Login error:", err);
@@ -280,6 +341,8 @@ async function registerUser(name, email) {
     }
 
     // Success — go to onboarding
+    currentUserEmail = email;
+    chrome.storage.local.set({ userEmail: email }); // Persist session
     navigate('onboarding');
 
   } catch (err) {
