@@ -15,7 +15,7 @@
     <div id="view-login" class="view active">
       <div class="login-container">
         <div class="login-brand">
-          <div class="logo-icon">🌱</div>
+          <img src="assets/kueski-logo.webp" style="width:24px;height:24px;object-fit:contain" alt="Kueski">
           <h1>Bienvenido</h1>
           <p class="login-subtitle">ACCEDE A TU ASISTENTE FINANCIERO</p>
         </div>
@@ -50,7 +50,7 @@
     <div id="view-register" class="view">
       <div class="login-container">
         <div class="login-brand">
-          <div class="logo-icon">🌱</div>
+          <img src="assets/kueski-logo.webp" style="width:24px;height:24px;object-fit:contain" alt="Kueski">
           <h1>Crear cuenta</h1>
           <p class="login-subtitle">ÚNETE AL ASISTENTE FINANCIERO</p>
         </div>
@@ -117,12 +117,12 @@
       <!-- Top Header -->
       <header class="app-header">
         <div class="header-brand">
-          <span class="logo-small">🌱</span>
+          <img src="assets/kueski-logo.webp" style="width:24px;height:24px;object-fit:contain" alt="Kueski">
           <span class="brand-name">Kueski</span>
         </div>
         <div class="header-actions">
-          <button class="icon-btn"><span class="material-symbols-outlined">notifications</span></button>
-          <button class="icon-btn"><span class="material-symbols-outlined">settings</span></button>
+          <button class="icon-btn" data-action="switch-tab" data-tab="account"><span class="material-symbols-outlined">notifications</span></button>
+          <button class="icon-btn" data-action="switch-tab" data-tab="account"><span class="material-symbols-outlined">settings</span></button>
         </div>
       </header>
 
@@ -136,7 +136,7 @@
             <span class="discount-badge">OFERTA LIMITADA</span>
             <h2 class="discount-amount">20% Descuento</h2>
             <p class="discount-desc">Oferta exclusiva en tu próxima compra en tiendas afiliadas.</p>
-            <div class="discount-cta">Aplicar ahora <span class="material-symbols-outlined">arrow_forward</span></div>
+            <div class="discount-cta">Pagar con Kueski Pay <span class="material-symbols-outlined">arrow_forward</span></div>
           </div>
 
           <!-- Financial Overview -->
@@ -197,6 +197,13 @@
               <div class="coupon-mini-info">
                 <strong>Liverpool</strong>
                 <span>$500 off</span>
+              </div>
+            </div>
+            <div class="coupon-mini" data-action="coupon-detail" data-code="NIKE20" data-amount="20% off" data-desc="Descuento exclusivo en Nike con Kueski Pay." data-expiry="31 de Dic 2026">
+              <div class="coupon-mini-icon">👟</div>
+              <div class="coupon-mini-info">
+                <strong>Nike</strong>
+                <span>20% off</span>
               </div>
             </div>
           </div>
@@ -422,7 +429,7 @@
               <span class="credit-limit-label">LÍMITE TOTAL</span>
               <strong class="credit-limit-val">$45,000.00</strong>
             </div>
-            <button class="btn-secondary" data-action="demo-loan" type="button">Solicitar préstamo</button>
+            <button class="btn-secondary" data-action="demo-loan" type="button">Kueski Cash</button>
           </div>
 
           <div class="section-header">
@@ -490,7 +497,7 @@
       <div class="overlay-card">
         <div class="overlay-header">
           <div class="header-brand">
-            <span class="logo-small">🌱</span>
+            <img src="assets/kueski-logo.webp" style="width:24px;height:24px;object-fit:contain" alt="Kueski">
             <span class="brand-name">Kueski</span>
           </div>
           <button class="icon-btn" data-action="close-coupon-detail">
@@ -550,7 +557,7 @@
       <div class="overlay-card">
         <div class="overlay-header">
           <div class="header-brand">
-            <span class="logo-small">🌱</span>
+            <img src="assets/kueski-logo.webp" style="width:24px;height:24px;object-fit:contain" alt="Kueski">
             <span class="brand-name">Kueski Pay</span>
           </div>
           <button class="icon-btn" data-action="close-checkout">

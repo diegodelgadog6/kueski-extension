@@ -61,7 +61,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         let result;
-
         try {
           result = await checkMerchantFromApi(domain);
         } catch (_apiError) {
@@ -83,6 +82,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ affiliated: false });
       }
     })();
+  }
+
+  if (message.type === 'HIGHLIGHT_ICON') {
+    // Flash badge to guide user to click the extension icon
+    let count = 0;
+    const interval = setInterval(() => {
+      chrome.action.setBadgeText({ text: count % 2 === 0 ? 'PAY' : '✓' });
+      chrome.action.setBadgeBackgroundColor({ color: '#2ECC71' });
+      count++;
+      if (count > 6) {
+        clearInterval(interval);
+        chrome.action.setBadgeText({ text: '✓' });
+      }
+    }, 400);
+    sendResponse({ ok: true });
   }
 
   if (message.type === 'LOG_ACTIVITY') {
