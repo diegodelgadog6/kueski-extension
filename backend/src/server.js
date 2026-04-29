@@ -151,9 +151,9 @@ app.get('/api/cuenta', async (req, res) => {
     if (cuenta.rows.length === 0)
       return res.status(404).json({ ok: false, error: 'Usuario no encontrado' });
     const txs = await db.query(`
-      SELECT t.id, t.total_amount, t.amount_per_installment,
-             pp.num_installments, t.status, t.created_at,
-             m.name AS merchant
+      SELECT t.id, t.total_amount, t.original_amount, t.discount_amount,
+              t.amount_per_installment, pp.num_installments, t.status, t.created_at,
+              m.name AS merchant
       FROM transactions t
       JOIN kueski_accounts ka ON ka.id = t.account_id
       JOIN users u            ON u.id  = ka.user_id
@@ -174,7 +174,7 @@ app.post('/api/transacciones', async (req, res) => {
   if (!email || !plan_id || !monto)
     return res.status(400).json({ ok: false, error: 'email, plan_id y monto son requeridos' });
 
-  const client = await db.connect();
+  const client = await db.pool.connect();
   try {
     await client.query('BEGIN');
     const cuentaRes = await client.query(`
@@ -264,6 +264,51 @@ app.post('/api/transacciones', async (req, res) => {
     client.release();
   }
 });
+
+// ── Register a new user and create their Kueski account ───────
+app.post('/api/register', async (req, res) => {
+  const { name, email } = req.body;
+  if (!name || !email)
+    return res.status(400).json({ ok: false, error: 'name and email are required' });
+
+  const client = await db.pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Check if email already exists
+    const existing = await client.query(
+      'SELECT id FROM users WHERE email = $1', [email]
+    );
+    if (existing.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ ok: false, error: 'Este correo ya está registrado' });
+    }
+
+    // Create the user
+    const userRes = await client.query(
+      'INSERT INTO users (email, name) VALUES ($1, $2) RETURNING *',
+      [email, name]
+    );
+    const user = userRes.rows[0];
+
+    // Create their Kueski account with $0 until credit is approved
+    await client.query(
+      'INSERT INTO kueski_accounts (user_id, credit_limit, available_balance) VALUES ($1, 0, 0)',
+      [user.id]
+    );
+
+    await client.query('COMMIT');
+    res.status(201).json({ ok: true, user: { id: user.id, name: user.name, email: user.email } });
+
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ ok: false, error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+
 
 app.listen(PORT, () => {
   console.log(`API running on http://localhost:${PORT}`);
