@@ -100,6 +100,83 @@ app.post('/api/activity', async (req, res) => {
   }
 });
 
+// Demo loan/top-up endpoint for prototype presentation
+app.post('/api/prestamo-demo', async (req, res) => {
+  const { email, amount } = req.body || {};
+
+  if (!email || !amount) {
+    return res.status(400).json({ ok: false, error: 'email y amount son requeridos' });
+  }
+
+  const parsedAmount = Number(amount);
+  if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+    return res.status(400).json({ ok: false, error: 'amount debe ser un número válido mayor a 0' });
+  }
+
+  let client;
+  try {
+    client = await db.pool.connect();
+    await client.query('BEGIN');
+
+    const accountResult = await client.query(`
+      SELECT ka.id, ka.available_balance, u.name
+      FROM kueski_accounts ka
+      JOIN users u ON u.id = ka.user_id
+      WHERE u.email = $1 AND ka.status = 'active'
+      FOR UPDATE
+    `, [email]);
+
+    if (accountResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ ok: false, error: 'Cuenta no encontrada' });
+    }
+
+    const account = accountResult.rows[0];
+    const newBalance = Number(account.available_balance) + parsedAmount;
+
+    await client.query(`
+      UPDATE kueski_accounts
+      SET available_balance = available_balance + $1,
+          updated_at = NOW()
+      WHERE id = $2
+    `, [parsedAmount, account.id]);
+
+    const planResult = await client.query(
+      'SELECT id FROM payment_plans WHERE active = TRUE ORDER BY num_installments LIMIT 1'
+    );
+    const planId = planResult.rows[0]?.id || 1;
+
+    const transactionResult = await client.query(`
+      INSERT INTO transactions
+        (account_id, plan_id, merchant_id, original_amount, discount_amount, total_amount, amount_per_installment, status)
+      VALUES ($1, $2, NULL, $3, 0, $3, $3, 'loaned')
+      RETURNING id, created_at
+    `, [account.id, planId, parsedAmount.toFixed(2)]);
+
+    await client.query(
+      'INSERT INTO user_activity (merchant_id, action, details) VALUES (NULL, $1, $2)',
+      ['loan_demo', `Préstamo demo de $${parsedAmount.toFixed(2)} acreditado a ${account.name}`]
+    );
+
+    await client.query('COMMIT');
+
+    return res.status(201).json({
+      ok: true,
+      new_balance: newBalance.toFixed(2),
+      transaction: transactionResult.rows[0]
+    });
+  } catch (error) {
+    if (client) {
+      await client.query('ROLLBACK');
+    }
+    return res.status(500).json({ ok: false, error: error.message });
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+});
+
 //  Get available payment plans 
 app.get('/api/planes', async (_req, res) => {
   try {
@@ -153,7 +230,7 @@ app.get('/api/cuenta', async (req, res) => {
     const txs = await db.query(`
       SELECT t.id, t.total_amount, t.original_amount, t.discount_amount,
               t.amount_per_installment, pp.num_installments, t.status, t.created_at,
-              m.name AS merchant
+            COALESCE(m.name, CASE WHEN t.status = 'loaned' THEN 'Préstamo demo' ELSE 'Kueski Pay' END) AS merchant
       FROM transactions t
       JOIN kueski_accounts ka ON ka.id = t.account_id
       JOIN users u            ON u.id  = ka.user_id

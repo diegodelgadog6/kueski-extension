@@ -148,7 +148,9 @@ async function loadActivityData() {
             tx.status === "completed" ? "paid" : "pending"
           }">
             ${
-              tx.status === "authorized"
+              tx.status === "loaned"
+                ? "PRÉSTAMO"
+                : tx.status === "authorized"
                 ? tx.num_installments + " QUINCENAS"
                 : tx.status.toUpperCase()
             }
@@ -291,6 +293,45 @@ function filterStores() {
   });
 }
 
+async function requestDemoLoan() {
+  if (!currentUserEmail) {
+    alert("Inicia sesión primero");
+    return;
+  }
+
+  const rawAmount = prompt("¿Cuánto dinero quieres agregar al saldo?");
+  if (rawAmount === null) return;
+
+  const amount = Number(rawAmount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    alert("Ingresa una cantidad válida");
+    return;
+  }
+
+  try {
+    const res = await fetch('http://localhost:3000/api/prestamo-demo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: currentUserEmail, amount })
+    });
+
+    const data = await res.json();
+
+    if (!data.ok) {
+      alert(data.error || 'No se pudo agregar el saldo');
+      return;
+    }
+
+    alert(`Listo. Se agregaron $${amount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} al saldo.`);
+    loadAccountData();
+    loadActivityData();
+    loadAccountTab();
+  } catch (err) {
+    console.error('Demo loan error:', err);
+    alert('No se pudo conectar al servidor.');
+  }
+}
+
 // ===== CATEGORY CHIP TOGGLE =====
 document.addEventListener("DOMContentLoaded", () => {
   document.addEventListener("click", (e) => {
@@ -381,6 +422,10 @@ document.addEventListener("DOMContentLoaded", () => {
       // Confirm payment and save to DB
       case 'checkout-confirm':
         checkoutConfirm();
+        break;
+
+      case 'demo-loan':
+        requestDemoLoan();
         break;
               
       default:
