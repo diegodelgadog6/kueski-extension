@@ -93,6 +93,9 @@ async function loadAccountData() {
   } catch (err) {
     console.error("Error loading account data:", err);
   }
+
+  loadCurrentSiteCoupon();
+  
 }
 
 // Fetch account + transactions from the backend for this user
@@ -193,6 +196,42 @@ async function loadAccountTab() {
 
   } catch (err) {
     console.error('Error loading account tab:', err);
+  }
+}
+
+// Detect current site and show its coupon on the hero card 
+async function loadCurrentSiteCoupon() {
+  try {
+    // Get the active tab's URL
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.url) return;
+
+    const domain = new URL(tab.url).hostname.replace('www.', '');
+
+    // Check if this merchant has a coupon in the DB
+    const res = await fetch(`http://localhost:3000/api/merchants/check?domain=${domain}`);
+    const data = await res.json();
+
+    if (!data.affiliated) return;
+
+    const { merchant, coupon: code, discount } = data.merchant;
+
+    // Update the hero card with real data
+    document.querySelector('.discount-card .discount-amount').textContent = discount;
+    document.querySelector('.discount-card .discount-desc').textContent =
+      `Oferta exclusiva en ${data.merchant.name} con Kueski Pay.`;
+
+    // Make "Aplicar ahora" open the coupon detail for this store
+    const card = document.querySelector('.discount-card');
+    card.dataset.code = code;
+    card.dataset.amount = discount;
+    card.dataset.desc = `Válido en ${data.merchant.name}.`;
+    card.dataset.expiry = data.merchant.expiresAt
+      ? new Date(data.merchant.expiresAt).toLocaleDateString('es-MX')
+      : '31 de Dic 2026';
+
+  } catch (err) {
+    console.error('Error loading site coupon:', err);
   }
 }
 
