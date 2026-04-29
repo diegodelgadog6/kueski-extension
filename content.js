@@ -28,12 +28,12 @@
     banner.id = 'kueski-banner';
     banner.innerHTML = `
       <div class="kueski-banner-content">
-        <span class="kueski-banner-logo">🌱</span>
+        <img src="${chrome.runtime.getURL('assets/kueski-logo.webp')}" style="width:24px;height:24px;object-fit:contain;border-radius:4px" alt="Kueski">
         <div class="kueski-banner-text">
           <strong>¡${merchant.name} acepta Kueski Pay!</strong>
           <span>Cupón disponible: ${merchant.discount} con código <b>${merchant.coupon}</b></span>
         </div>
-        <button class="kueski-banner-btn" id="kueski-copy-btn">Copiar código</button>
+        <button class="kueski-banner-btn" id="kueski-copy-btn">Pagar con Kueski Pay</button>
         <button class="kueski-banner-close" id="kueski-close-btn">✕</button>
       </div>
     `;
@@ -45,19 +45,21 @@
       banner.classList.add('kueski-banner-show');
     });
 
-    // Copy button
+    // Prompt user to open the widget to pay with Kueski Pay
     document.getElementById('kueski-copy-btn').addEventListener('click', () => {
-      navigator.clipboard.writeText(merchant.coupon);
-      document.getElementById('kueski-copy-btn').textContent = '¡Copiado!';
+      // Flash the extension badge to guide user to open the popup
+      chrome.runtime.sendMessage({ type: 'HIGHLIGHT_ICON' });
       chrome.runtime.sendMessage({
         type: 'LOG_ACTIVITY',
         domain: currentDomain,
-        action: 'copied_coupon',
-        details: `Cupón ${merchant.coupon} copiado`
+        action: 'opened_widget',
+        details: `Pago iniciado en ${merchant.name}`
       });
-      setTimeout(() => {
-        document.getElementById('kueski-copy-btn').textContent = 'Copiar código';
-      }, 2000);
+      // Update banner to guide user
+      const logoUrl = chrome.runtime.getURL('assets/icon48.png');
+      document.querySelector('.kueski-banner-text span').innerHTML = `Haz clic en el ícono <img src="${logoUrl}" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;border-radius:3px"> en tu barra de herramientas`;
+      document.getElementById('kueski-copy-btn').textContent = '✓ Listo';
+      document.getElementById('kueski-copy-btn').disabled = true;
     });
 
     // Close button
