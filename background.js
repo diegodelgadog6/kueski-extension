@@ -3,16 +3,16 @@ const API_BASE_URL = 'http://localhost:3000';
 
 // Simulated list of affiliated merchants (domains)
 const AFFILIATED_MERCHANTS = [
-  { domain: 'amazon.com.mx', name: 'Amazon México', coupon: 'AMAZON15', discount: '15% off' },
-  { domain: 'liverpool.com.mx', name: 'Liverpool', coupon: 'LIVERPOOL500', discount: '$500 off' },
-  { domain: 'privalia.com.mx', name: 'Privalia', coupon: 'PRIVALIA10', discount: '10% off' },
-  { domain: 'nike.com', name: 'Nike', coupon: 'NIKE20', discount: '20% off' },
-  { domain: 'zara.com', name: 'Zara', coupon: 'ZARA15', discount: '15% off' },
-  { domain: 'att.com.mx', name: 'AT&T', coupon: 'ATT_MSI', discount: 'MSI disponible' },
-  { domain: 'officedepot.com.mx', name: 'Office Depot', coupon: 'OFFICE5', discount: '5% cashback' },
-  { domain: 'puma.com', name: 'Puma', coupon: 'PUMA15', discount: '15% off' },
-  { domain: 'adidas.com.mx', name: 'Adidas', coupon: 'ADIDAS20', discount: '20% off' },
-  { domain: 'shein.com', name: 'Shein', coupon: 'SHEIN25', discount: '25% off' }
+  { domain: 'amazon.com.mx', name: 'Amazon México' },
+  { domain: 'liverpool.com.mx', name: 'Liverpool' },
+  { domain: 'privalia.com.mx', name: 'Privalia' },
+  { domain: 'nike.com', name: 'Nike' },
+  { domain: 'zara.com', name: 'Zara' },
+  { domain: 'att.com.mx', name: 'AT&T' },
+  { domain: 'officedepot.com.mx', name: 'Office Depot' },
+  { domain: 'puma.com', name: 'Puma' },
+  { domain: 'adidas.com.mx', name: 'Adidas' },
+  { domain: 'shein.com', name: 'Shein' }
 ];
 
 async function checkMerchantFromApi(domain) {
@@ -84,8 +84,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     })();
   }
 
+  if (message.type === 'OPEN_POPUP') {
+    (async () => {
+      try {
+        if (typeof chrome.action.openPopup === 'function') {
+          await chrome.action.openPopup();
+          sendResponse({ ok: true });
+        } else {
+          sendResponse({ ok: false });
+        }
+      } catch (_error) {
+        sendResponse({ ok: false });
+      }
+    })();
+  }
+
   if (message.type === 'HIGHLIGHT_ICON') {
-    // Flash badge to guide user to click the extension icon
     let count = 0;
     const interval = setInterval(() => {
       chrome.action.setBadgeText({ text: count % 2 === 0 ? 'PAY' : '✓' });
