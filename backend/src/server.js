@@ -248,6 +248,122 @@ app.get('/api/recordatorios', async (req, res) => {
   }
 });
 
+// Transfer balance between extension users
+app.post('/api/transferencias', async (req, res) => {
+  const { from_email, to, amount } = req.body || {};
+
+  if (!from_email || !to || amount == null) {
+    return res.status(400).json({ ok: false, error: 'from_email, to y amount son requeridos' });
+  }
+
+  const parsedAmount = Number(amount);
+  if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+    return res.status(400).json({ ok: false, error: 'amount debe ser un número válido mayor a 0' });
+  }
+
+  const recipientKey = String(to).trim();
+  if (!recipientKey) {
+    return res.status(400).json({ ok: false, error: 'Destinatario inválido' });
+  }
+
+  let client;
+  try {
+    client = await db.pool.connect();
+    await client.query('BEGIN');
+
+    const senderResult = await client.query(`
+      SELECT u.id, u.email, u.name, ka.id AS account_id, ka.available_balance
+      FROM users u
+      JOIN kueski_accounts ka ON ka.user_id = u.id
+      WHERE LOWER(u.email) = LOWER($1) AND ka.status = 'active'
+      FOR UPDATE
+    `, [from_email]);
+
+    if (senderResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ ok: false, error: 'Cuenta del remitente no encontrada' });
+    }
+
+    const sender = senderResult.rows[0];
+    const recipientQuery = recipientKey.includes('@')
+      ? `LOWER(u.email) = LOWER($1)`
+      : `LOWER(u.name) = LOWER($1)`;
+
+    const recipientResult = await client.query(`
+      SELECT u.id, u.email, u.name, ka.id AS account_id, ka.available_balance
+      FROM users u
+      JOIN kueski_accounts ka ON ka.user_id = u.id
+      WHERE ${recipientQuery} AND ka.status = 'active'
+      FOR UPDATE
+    `, [recipientKey]);
+
+    if (recipientResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ ok: false, error: 'Destinatario no encontrado. Debe estar registrado en la extensión.' });
+    }
+
+    const recipient = recipientResult.rows[0];
+
+    if (sender.id === recipient.id) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ ok: false, error: 'No puedes transferirte a ti mismo' });
+    }
+
+    if (parseFloat(sender.available_balance) < parsedAmount) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ ok: false, error: 'Saldo insuficiente' });
+    }
+
+    const senderNewBalance = parseFloat(sender.available_balance) - parsedAmount;
+    const recipientNewBalance = parseFloat(recipient.available_balance) + parsedAmount;
+
+    await client.query(`
+      UPDATE kueski_accounts
+      SET available_balance = $1, updated_at = NOW()
+      WHERE id = $2
+    `, [senderNewBalance.toFixed(2), sender.account_id]);
+
+    await client.query(`
+      UPDATE kueski_accounts
+      SET available_balance = $1, updated_at = NOW()
+      WHERE id = $2
+    `, [recipientNewBalance.toFixed(2), recipient.account_id]);
+
+    await client.query(
+      'INSERT INTO user_activity (merchant_id, action, details) VALUES (NULL, $1, $2)',
+      ['transfer_out', `Transferencia de $${parsedAmount.toFixed(2)} a ${recipient.email}`]
+    );
+
+    await client.query(
+      'INSERT INTO user_activity (merchant_id, action, details) VALUES (NULL, $1, $2)',
+      ['transfer_in', `Transferencia recibida de $${parsedAmount.toFixed(2)} de ${sender.email}`]
+    );
+
+    await client.query(`
+      INSERT INTO user_transfers (from_account_id, to_account_id, amount)
+      VALUES ($1, $2, $3)
+    `, [sender.account_id, recipient.account_id, parsedAmount.toFixed(2)]);
+
+    await client.query('COMMIT');
+
+    return res.status(201).json({
+      ok: true,
+      transferencia: {
+        amount: parsedAmount.toFixed(2),
+        from: sender.email,
+        to: recipient.email,
+        sender_balance: senderNewBalance.toFixed(2),
+        recipient_balance: recipientNewBalance.toFixed(2)
+      }
+    });
+  } catch (error) {
+    if (client) await client.query('ROLLBACK');
+    return res.status(500).json({ ok: false, error: error.message });
+  } finally {
+    if (client) client.release();
+  }
+});
+
 //  Get account info for a user 
 app.get('/api/cuenta', async (req, res) => {
   const { email } = req.query;
@@ -265,16 +381,38 @@ app.get('/api/cuenta', async (req, res) => {
     if (cuenta.rows.length === 0)
       return res.status(404).json({ ok: false, error: 'Usuario no encontrado' });
     const txs = await db.query(`
-      SELECT t.id, t.total_amount, t.original_amount, t.discount_amount,
-              t.amount_per_installment, pp.num_installments, t.status, t.created_at,
-            COALESCE(m.name, CASE WHEN t.status = 'loaned' THEN 'Préstamo demo' ELSE 'Kueski Pay' END) AS merchant
-      FROM transactions t
-      JOIN kueski_accounts ka ON ka.id = t.account_id
-      JOIN users u            ON u.id  = ka.user_id
-      JOIN payment_plans pp   ON pp.id = t.plan_id
-      LEFT JOIN merchants m   ON m.id  = t.merchant_id
-      WHERE u.email = $1
-      ORDER BY t.created_at DESC LIMIT 5
+      SELECT * FROM (
+        SELECT t.id, t.total_amount, t.original_amount, t.discount_amount,
+               t.amount_per_installment, pp.num_installments, t.status, t.created_at,
+               COALESCE(m.name, CASE WHEN t.status = 'loaned' THEN 'Préstamo demo' ELSE 'Kueski Pay' END) AS merchant
+        FROM transactions t
+        JOIN kueski_accounts ka ON ka.id = t.account_id
+        JOIN users u            ON u.id  = ka.user_id
+        JOIN payment_plans pp   ON pp.id = t.plan_id
+        LEFT JOIN merchants m   ON m.id  = t.merchant_id
+        WHERE u.email = $1
+
+        UNION ALL
+
+        SELECT ut.id, ut.amount, ut.amount, 0,
+               ut.amount, 1,
+               CASE WHEN ut.from_account_id = ka.id THEN 'transfer_sent' ELSE 'transfer_received' END,
+               ut.created_at,
+               CASE
+                 WHEN ut.from_account_id = ka.id THEN 'Transferencia a ' || u_to.name
+                 ELSE 'Transferencia de ' || u_from.name
+               END
+        FROM user_transfers ut
+        JOIN kueski_accounts ka ON ka.id = ut.from_account_id OR ka.id = ut.to_account_id
+        JOIN users u ON u.id = ka.user_id
+        JOIN kueski_accounts ka_from ON ka_from.id = ut.from_account_id
+        JOIN users u_from ON u_from.id = ka_from.user_id
+        JOIN kueski_accounts ka_to ON ka_to.id = ut.to_account_id
+        JOIN users u_to ON u_to.id = ka_to.user_id
+        WHERE u.email = $1
+      ) activity
+      ORDER BY created_at DESC
+      LIMIT 10
     `, [email]);
     res.json({ ok: true, cuenta: cuenta.rows[0], ultimas_transacciones: txs.rows });
   } catch (err) {
@@ -434,6 +572,23 @@ app.post('/api/register', async (req, res) => {
 
 
 
-app.listen(PORT);
+async function ensureTransferSchema() {
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS user_transfers (
+      id SERIAL PRIMARY KEY,
+      from_account_id INTEGER NOT NULL REFERENCES kueski_accounts(id) ON DELETE CASCADE,
+      to_account_id INTEGER NOT NULL REFERENCES kueski_accounts(id) ON DELETE CASCADE,
+      amount NUMERIC(12,2) NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+  `);
+}
+
+ensureTransferSchema()
+  .then(() => app.listen(PORT))
+  .catch((err) => {
+    console.error('Failed to initialize transfer schema:', err);
+    process.exit(1);
+  });
 
 

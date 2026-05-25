@@ -424,6 +424,12 @@
             <div class="progress-bar"><div class="progress-fill" style="width:35%"></div></div>
           </div>
 
+          <div class="account-actions">
+            <button class="btn-secondary btn-transfer" data-action="open-transfer" type="button">
+              <span class="material-symbols-outlined tiny">swap_horiz</span> Transferir
+            </button>
+          </div>
+
           <div class="credit-limit-row">
             <div>
               <span class="credit-limit-label">LÍMITE TOTAL</span>
@@ -562,6 +568,51 @@
           </button>
         </div>
         <div id="reminders-list" class="reminders-list"></div>
+      </div>
+    </div>
+
+    <!-- ==================== TRANSFER OVERLAY ==================== -->
+    <div id="transfer-overlay" class="overlay hidden">
+      <div class="overlay-card">
+        <div class="overlay-header">
+          <div class="header-brand">
+            <img src="assets/kueski-logo.webp" style="width:24px;height:24px;object-fit:contain" alt="Kueski">
+            <span class="brand-name">Kueski</span>
+          </div>
+          <button class="icon-btn" data-action="close-transfer">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div id="transfer-step-form" class="transfer-step">
+          <h2 class="transfer-title">Transferir</h2>
+          <p class="transfer-balance" id="transfer-balance-display">Saldo disponible: $4,850.00</p>
+
+          <div class="form-group">
+            <label>DESTINATARIO</label>
+            <input type="text" id="transfer-recipient" placeholder="Email o nombre del destinatario">
+          </div>
+          <div class="form-group">
+            <label>MONTO</label>
+            <input type="number" id="transfer-amount" placeholder="$0.00" min="0.01" step="0.01">
+          </div>
+
+          <button class="btn-primary" data-action="transfer-submit" type="button">Transferir</button>
+        </div>
+
+        <div id="transfer-step-confirm" class="transfer-step hidden">
+          <p class="transfer-confirm-text" id="transfer-confirm-text"></p>
+          <div class="transfer-confirm-actions">
+            <button class="btn-primary" data-action="transfer-confirm" type="button">Confirmar</button>
+            <button class="btn-secondary transfer-cancel-btn" data-action="transfer-cancel" type="button">Cancelar</button>
+          </div>
+        </div>
+
+        <div id="transfer-step-success" class="transfer-step hidden">
+          <div class="transfer-success-icon">✅</div>
+          <h2 class="transfer-success-title">Transferencia enviada exitosamente</h2>
+          <button class="btn-primary" data-action="close-transfer" type="button">Listo</button>
+        </div>
       </div>
     </div>
 

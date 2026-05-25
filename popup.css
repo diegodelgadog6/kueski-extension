@@ -1193,6 +1193,69 @@ body {
   line-height: 1.5;
 }
 
+/* ===== TRANSFER OVERLAY ===== */
+.account-actions {
+  margin-bottom: 12px;
+}
+
+.btn-transfer {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.transfer-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--primary);
+  margin-bottom: 8px;
+}
+
+.transfer-balance {
+  font-size: 13px;
+  color: var(--on-surface-variant);
+  margin-bottom: 16px;
+}
+
+.transfer-step.hidden {
+  display: none;
+}
+
+.transfer-confirm-text {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--on-surface);
+  text-align: center;
+  margin: 24px 0;
+  line-height: 1.5;
+}
+
+.transfer-confirm-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.transfer-cancel-btn {
+  width: 100%;
+}
+
+.transfer-success-icon {
+  font-size: 48px;
+  text-align: center;
+  margin: 16px 0 12px;
+}
+
+.transfer-success-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--green-dark);
+  text-align: center;
+  margin-bottom: 20px;
+}
+
 /* ===== ANIMATIONS ===== */
 @keyframes fadeIn {
   from {
