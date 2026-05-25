@@ -272,6 +272,44 @@ function closeCouponDetail() {
   document.getElementById("coupon-overlay").classList.add("hidden");
 }
 
+// ===== PAYMENT REMINDERS =====
+const PAYMENT_REMINDERS = [
+  { merchant: 'Amazon', amount: 421.0, dueDate: '28 May 2026', status: 'warning', label: 'Vence en 3 días' },
+  { merchant: 'Privalia', amount: 634.75, dueDate: '30 May 2026', status: 'warning', label: 'Vence en 5 días' },
+  { merchant: 'Liverpool', amount: 1098.75, dueDate: '1 Jun 2026', status: 'warning', label: 'Vence en 7 días' },
+  { merchant: 'Nike', amount: 949.5, dueDate: 'Pagado', status: 'paid', label: 'Pagado' }
+];
+
+function renderReminders() {
+  const list = document.getElementById('reminders-list');
+  if (!list) return;
+
+  list.innerHTML = PAYMENT_REMINDERS.map((item) => {
+    const badgeClass = item.status === 'paid' ? 'badge-paid' : item.status === 'danger' ? 'badge-danger' : 'badge-warning';
+    const dateText = item.status === 'paid' ? item.dueDate : `Vence ${item.dueDate}`;
+
+    return `
+      <div class="reminder-row">
+        <div class="reminder-info">
+          <strong>${item.merchant}</strong>
+          <span class="reminder-amount">$${item.amount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+          <span class="reminder-date">${dateText}</span>
+        </div>
+        <span class="reminder-badge ${badgeClass}">${item.label}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+function openReminders() {
+  renderReminders();
+  document.getElementById('reminders-overlay').classList.remove('hidden');
+}
+
+function closeReminders() {
+  document.getElementById('reminders-overlay').classList.add('hidden');
+}
+
 // ===== COPY COUPON CODE =====
 function copyCode() {
   const code = document.getElementById("cd-code").textContent;
@@ -390,6 +428,12 @@ document.addEventListener("DOMContentLoaded", () => {
           break;
       case "close-coupon-detail":
         closeCouponDetail();
+        break;
+      case "open-reminders":
+        openReminders();
+        break;
+      case "close-reminders":
+        closeReminders();
         break;
       case "copy-code":
         copyCode();
@@ -668,6 +712,9 @@ async function checkoutConfirm() {
 
 // ===== CLOSE OVERLAY ON BACKDROP CLICK =====
 document.addEventListener("click", (e) => {
-  const overlay = document.getElementById("coupon-overlay");
-  if (e.target === overlay) closeCouponDetail();
+  const couponOverlay = document.getElementById("coupon-overlay");
+  if (e.target === couponOverlay) closeCouponDetail();
+
+  const remindersOverlay = document.getElementById("reminders-overlay");
+  if (e.target === remindersOverlay) closeReminders();
 });

@@ -1114,6 +1114,77 @@ body {
   line-height: 1.4;
 }
 
+/* ===== PAYMENT REMINDERS OVERLAY ===== */
+.reminders-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--primary);
+}
+
+.reminders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.reminder-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--surface-container-low);
+  border-radius: 14px;
+}
+
+.reminder-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.reminder-info strong {
+  font-size: 14px;
+  color: var(--on-surface);
+}
+
+.reminder-amount {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.reminder-date {
+  font-size: 11px;
+  color: var(--on-surface-variant);
+}
+
+.reminder-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  padding: 4px 10px;
+  border-radius: 50px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.reminder-badge.badge-warning {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.reminder-badge.badge-danger {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.reminder-badge.badge-paid {
+  background: #e8f5e9;
+  color: var(--green-dark);
+}
+
 /* ===== ANIMATIONS ===== */
 @keyframes fadeIn {
   from {
