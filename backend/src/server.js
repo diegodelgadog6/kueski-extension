@@ -727,6 +727,30 @@ app.post('/api/register', async (req, res) => {
 });
 
 
+// Delete user account and all related data (cascades in DB)
+app.delete('/api/cuenta', async (req, res) => {
+  const { email } = req.body || {};
+  if (!email) {
+    return res.status(400).json({ ok: false, error: 'email requerido' });
+  }
+
+  try {
+    const result = await db.query(
+      'DELETE FROM users WHERE LOWER(email) = LOWER($1) RETURNING id',
+      [email]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ ok: false, error: 'Usuario no encontrado' });
+    }
+
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+
 
 async function ensureTransferSchema() {
   await db.query(`

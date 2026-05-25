@@ -923,6 +923,47 @@ body {
   color: var(--error);
 }
 
+.btn-delete-account {
+  width: 100%;
+  margin-top: 24px;
+  padding: 14px 16px;
+  border: none;
+  border-radius: 14px;
+  background: var(--error);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn-delete-account:hover {
+  opacity: 0.92;
+}
+
+.delete-account-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--primary);
+}
+
+.delete-account-text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--on-surface-variant);
+  margin-bottom: 20px;
+}
+
+.delete-account-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.delete-account-actions .btn-delete-account {
+  margin-top: 0;
+}
+
 /* ===== BOTTOM NAV ===== */
 .bottom-nav {
   display: flex;

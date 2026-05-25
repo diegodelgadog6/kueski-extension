@@ -559,6 +559,40 @@ function closeReminders() {
   document.getElementById('reminders-overlay').classList.add('hidden');
 }
 
+function openDeleteAccount() {
+  document.getElementById('delete-account-overlay').classList.remove('hidden');
+}
+
+function closeDeleteAccount() {
+  document.getElementById('delete-account-overlay').classList.add('hidden');
+}
+
+async function confirmDeleteAccount() {
+  if (!currentUserEmail) return;
+
+  try {
+    const res = await fetch('http://localhost:3000/api/cuenta', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: currentUserEmail }),
+    });
+    const data = await res.json();
+
+    if (!data.ok) {
+      alert(data.error || 'No se pudo eliminar la cuenta');
+      return;
+    }
+
+    closeDeleteAccount();
+    currentUserEmail = null;
+    chrome.storage.local.remove('userEmail');
+    navigate('login');
+  } catch (err) {
+    console.error('Error deleting account:', err);
+    alert('Error de conexión al eliminar la cuenta');
+  }
+}
+
 async function payInstallment(installmentId) {
   if (!currentUserEmail || !installmentId) return;
 
@@ -889,6 +923,15 @@ document.addEventListener("DOMContentLoaded", () => {
         chrome.storage.local.remove('userEmail');
         navigate('login');
         break;
+      case 'open-delete-account':
+        openDeleteAccount();
+        break;
+      case 'close-delete-account':
+        closeDeleteAccount();
+        break;
+      case 'confirm-delete-account':
+        confirmDeleteAccount();
+        break;
 
       // Hide checkout overlay and refresh balance
       case 'close-checkout':
@@ -1167,4 +1210,7 @@ document.addEventListener("click", (e) => {
 
   const transactionOverlay = document.getElementById("transaction-overlay");
   if (e.target === transactionOverlay) closeTransactionDetail();
+
+  const deleteAccountOverlay = document.getElementById("delete-account-overlay");
+  if (e.target === deleteAccountOverlay) closeDeleteAccount();
 });

@@ -20,12 +20,6 @@
           <p class="login-subtitle">ACCEDE A TU ASISTENTE FINANCIERO</p>
         </div>
         <div class="login-card">
-          <div class="social-buttons">
-            <button class="social-btn"><span class="material-symbols-outlined">mail</span></button>
-            <button class="social-btn"><span class="material-symbols-outlined">smartphone</span></button>
-            <button class="social-btn"><span class="material-symbols-outlined">fingerprint</span></button>
-          </div>
-          <div class="divider"><span>O</span></div>
           <div class="form-group">
             <label>CORREO ELECTRÓNICO</label>
             <input type="email" placeholder="usuario@email.com" id="login-email">
@@ -472,6 +466,10 @@
               <span class="material-symbols-outlined menu-arrow">chevron_right</span>
             </div>
           </div>
+
+          <button class="btn-delete-account" type="button" data-action="open-delete-account">
+            Eliminar cuenta
+          </button>
         </div>
       </main>
 
@@ -662,6 +660,25 @@
           </div>
         </div>
 
+      </div>
+    </div>
+
+    <!-- ==================== DELETE ACCOUNT OVERLAY ==================== -->
+    <div id="delete-account-overlay" class="overlay hidden">
+      <div class="overlay-card">
+        <div class="overlay-header">
+          <h2 class="delete-account-title">Eliminar cuenta</h2>
+          <button class="icon-btn" data-action="close-delete-account">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <p class="delete-account-text">
+          ¿Seguro que quieres eliminar tu cuenta? Se borrarán tus datos, transacciones y saldo. Esta acción no se puede deshacer.
+        </p>
+        <div class="delete-account-actions">
+          <button class="btn-secondary" type="button" data-action="close-delete-account">Cancelar</button>
+          <button class="btn-delete-account" type="button" data-action="confirm-delete-account">Eliminar cuenta</button>
+        </div>
       </div>
     </div>
 
