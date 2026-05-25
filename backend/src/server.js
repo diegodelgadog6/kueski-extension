@@ -233,13 +233,13 @@ app.get('/api/recordatorios', async (req, res) => {
       LEFT JOIN merchants m ON m.id = t.merchant_id
       WHERE u.email = $1
         AND (
-          (i.status = 'pending' AND i.due_date <= CURRENT_DATE + INTERVAL '60 days')
+          i.status = 'pending'
           OR (i.paid_at IS NOT NULL AND i.paid_at >= CURRENT_DATE - INTERVAL '30 days')
         )
       ORDER BY
         CASE WHEN i.paid_at IS NOT NULL THEN 1 ELSE 0 END,
         i.due_date ASC
-      LIMIT 10
+      LIMIT 50
     `, [email]);
 
     res.json({ ok: true, recordatorios: result.rows });

@@ -273,14 +273,36 @@ function closeCouponDetail() {
 }
 
 // ===== PAYMENT REMINDERS =====
+function parseDueDate(value) {
+  if (!value) return null;
+
+  if (value instanceof Date) {
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  }
+
+  const str = String(value);
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  }
+
+  const parsed = new Date(str);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+}
+
 function getReminderBadge(dueDate, isPaid) {
   if (isPaid) {
     return { status: 'paid', label: 'Pagado' };
   }
 
+  const due = parseDueDate(dueDate);
+  if (!due) {
+    return { status: 'warning', label: 'Fecha pendiente' };
+  }
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const due = new Date(dueDate + 'T00:00:00');
   const diffDays = Math.round((due - today) / (1000 * 60 * 60 * 24));
 
   if (diffDays < 0) {
@@ -295,9 +317,9 @@ function getReminderBadge(dueDate, isPaid) {
   return { status: 'warning', label: `Vence en ${diffDays} días` };
 }
 
-function formatReminderDate(dueDate, isPaid) {
-  if (isPaid) return 'Pagado';
-  const date = new Date(dueDate + 'T00:00:00');
+function formatReminderDate(dueDate) {
+  const date = parseDueDate(dueDate);
+  if (!date) return 'Fecha no disponible';
   return date.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
@@ -334,7 +356,7 @@ async function loadReminders() {
       const badge = getReminderBadge(item.due_date, isPaid);
       const badgeClass =
         badge.status === 'paid' ? 'badge-paid' : badge.status === 'danger' ? 'badge-danger' : 'badge-warning';
-      const dateText = isPaid ? 'Pagado' : `Vence ${formatReminderDate(item.due_date, false)}`;
+      const dateText = isPaid ? 'Pagado' : `Vence ${formatReminderDate(item.due_date)}`;
       const amount = parseFloat(item.amount);
 
       return `
