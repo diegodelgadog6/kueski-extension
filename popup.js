@@ -273,37 +273,90 @@ function closeCouponDetail() {
 }
 
 // ===== PAYMENT REMINDERS =====
-const PAYMENT_REMINDERS = [
-  { merchant: 'Amazon', amount: 421.0, dueDate: '28 May 2026', status: 'warning', label: 'Vence en 3 días' },
-  { merchant: 'Privalia', amount: 634.75, dueDate: '30 May 2026', status: 'warning', label: 'Vence en 5 días' },
-  { merchant: 'Liverpool', amount: 1098.75, dueDate: '1 Jun 2026', status: 'warning', label: 'Vence en 7 días' },
-  { merchant: 'Nike', amount: 949.5, dueDate: 'Pagado', status: 'paid', label: 'Pagado' }
-];
+function getReminderBadge(dueDate, isPaid) {
+  if (isPaid) {
+    return { status: 'paid', label: 'Pagado' };
+  }
 
-function renderReminders() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(dueDate + 'T00:00:00');
+  const diffDays = Math.round((due - today) / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    return { status: 'danger', label: 'Vencido' };
+  }
+  if (diffDays === 0) {
+    return { status: 'danger', label: 'Vence hoy' };
+  }
+  if (diffDays === 1) {
+    return { status: 'danger', label: 'Vence mañana' };
+  }
+  return { status: 'warning', label: `Vence en ${diffDays} días` };
+}
+
+function formatReminderDate(dueDate, isPaid) {
+  if (isPaid) return 'Pagado';
+  const date = new Date(dueDate + 'T00:00:00');
+  return date.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+async function loadReminders() {
   const list = document.getElementById('reminders-list');
   if (!list) return;
 
-  list.innerHTML = PAYMENT_REMINDERS.map((item) => {
-    const badgeClass = item.status === 'paid' ? 'badge-paid' : item.status === 'danger' ? 'badge-danger' : 'badge-warning';
-    const dateText = item.status === 'paid' ? item.dueDate : `Vence ${item.dueDate}`;
+  if (!currentUserEmail) {
+    list.innerHTML = '<p class="reminders-empty">Inicia sesión para ver tus recordatorios</p>';
+    return;
+  }
 
-    return `
-      <div class="reminder-row">
-        <div class="reminder-info">
-          <strong>${item.merchant}</strong>
-          <span class="reminder-amount">$${item.amount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-          <span class="reminder-date">${dateText}</span>
+  list.innerHTML = '<p class="reminders-empty">Cargando recordatorios...</p>';
+
+  try {
+    const res = await fetch(
+      `http://localhost:3000/api/recordatorios?email=${encodeURIComponent(currentUserEmail)}`
+    );
+    const data = await res.json();
+
+    if (!data.ok) {
+      list.innerHTML = '<p class="reminders-empty">No se pudieron cargar los recordatorios</p>';
+      return;
+    }
+
+    if (!data.recordatorios || data.recordatorios.length === 0) {
+      list.innerHTML =
+        '<p class="reminders-empty">No tienes pagos próximos. Realiza una compra con Kueski Pay para ver recordatorios aquí.</p>';
+      return;
+    }
+
+    list.innerHTML = data.recordatorios.map((item) => {
+      const isPaid = item.status === 'paid' || item.paid_at != null;
+      const badge = getReminderBadge(item.due_date, isPaid);
+      const badgeClass =
+        badge.status === 'paid' ? 'badge-paid' : badge.status === 'danger' ? 'badge-danger' : 'badge-warning';
+      const dateText = isPaid ? 'Pagado' : `Vence ${formatReminderDate(item.due_date, false)}`;
+      const amount = parseFloat(item.amount);
+
+      return `
+        <div class="reminder-row">
+          <div class="reminder-info">
+            <strong>${item.merchant}</strong>
+            <span class="reminder-amount">$${amount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+            <span class="reminder-date">${dateText}</span>
+          </div>
+          <span class="reminder-badge ${badgeClass}">${badge.label}</span>
         </div>
-        <span class="reminder-badge ${badgeClass}">${item.label}</span>
-      </div>
-    `;
-  }).join('');
+      `;
+    }).join('');
+  } catch (err) {
+    console.error('Error loading reminders:', err);
+    list.innerHTML = '<p class="reminders-empty">No se pudo conectar al servidor</p>';
+  }
 }
 
 function openReminders() {
-  renderReminders();
   document.getElementById('reminders-overlay').classList.remove('hidden');
+  loadReminders();
 }
 
 function closeReminders() {

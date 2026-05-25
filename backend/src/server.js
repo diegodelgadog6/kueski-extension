@@ -211,6 +211,43 @@ app.get('/api/cupones/check', async (req, res) => {
   }
 });
 
+// Upcoming installments from purchases made inside the extension
+app.get('/api/recordatorios', async (req, res) => {
+  const { email } = req.query;
+  if (!email) return res.status(400).json({ ok: false, error: 'email requerido' });
+
+  try {
+    const result = await db.query(`
+      SELECT
+        i.id,
+        i.amount,
+        i.due_date,
+        i.status,
+        i.paid_at,
+        i.installment_no,
+        COALESCE(m.name, 'Kueski Pay') AS merchant
+      FROM installments i
+      JOIN transactions t ON t.id = i.transaction_id
+      JOIN kueski_accounts ka ON ka.id = t.account_id
+      JOIN users u ON u.id = ka.user_id
+      LEFT JOIN merchants m ON m.id = t.merchant_id
+      WHERE u.email = $1
+        AND (
+          (i.status = 'pending' AND i.due_date <= CURRENT_DATE + INTERVAL '60 days')
+          OR (i.paid_at IS NOT NULL AND i.paid_at >= CURRENT_DATE - INTERVAL '30 days')
+        )
+      ORDER BY
+        CASE WHEN i.paid_at IS NOT NULL THEN 1 ELSE 0 END,
+        i.due_date ASC
+      LIMIT 10
+    `, [email]);
+
+    res.json({ ok: true, recordatorios: result.rows });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 //  Get account info for a user 
 app.get('/api/cuenta', async (req, res) => {
   const { email } = req.query;

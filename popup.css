@@ -1185,6 +1185,14 @@ body {
   color: var(--green-dark);
 }
 
+.reminders-empty {
+  font-size: 13px;
+  color: var(--on-surface-variant);
+  text-align: center;
+  padding: 24px 12px;
+  line-height: 1.5;
+}
+
 /* ===== ANIMATIONS ===== */
 @keyframes fadeIn {
   from {
