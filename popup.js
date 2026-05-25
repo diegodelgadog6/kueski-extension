@@ -52,6 +52,13 @@ function switchTab(tabName) {
 }
 
 
+function getCreditUsagePercent(usedBalance, creditLimit) {
+  const limit = parseFloat(creditLimit);
+  const used = parseFloat(usedBalance);
+  if (!limit || limit <= 0) return 0;
+  return Math.min(100, Math.round((used / limit) * 100));
+}
+
 // Load real account data from the API
 async function loadAccountData() {
   const email = currentUserEmail;
@@ -67,32 +74,26 @@ async function loadAccountData() {
     // Update balance (Home tab)
     const homeBalance = document.querySelector('#tab-home .balance-amount');
     if (homeBalance) {
-      homeBalance.textContent =
-        '$' +
-        parseFloat(c.available_balance).toLocaleString('es-MX', {
-          minimumFractionDigits: 2,
-        });
+      homeBalance.textContent = formatMoneyValue(c.available_balance);
     }
 
-    // Update credit card bar
-    const usedPct = parseFloat(c.credit_limit) > 0
-  ? Math.round((parseFloat(c.used_balance) / parseFloat(c.credit_limit)) * 100)
-  : 0;
-    document.querySelector(".credit-pct").textContent = usedPct + "%";
-    document.querySelector(".progress-fill").style.width = usedPct + "%";
-    document.querySelector(".credit-range span:first-child").textContent =
-      "$" + parseFloat(c.used_balance).toLocaleString("es-MX") + " Usado";
-    document.querySelector(".credit-range span:last-child").textContent =
-      "$" + parseFloat(c.credit_limit).toLocaleString("es-MX") + " Límite";
+    // Update credit usage card (Home tab)
+    const homeCreditCard = document.querySelector('#tab-home .credit-card');
+    if (homeCreditCard) {
+      const usedPct = getCreditUsagePercent(c.used_balance, c.credit_limit);
+      homeCreditCard.querySelector('.credit-pct').textContent = usedPct + '%';
+      homeCreditCard.querySelector('.progress-fill').style.width = usedPct + '%';
+      homeCreditCard.querySelector('.credit-range span:first-child').textContent =
+        formatMoneyValue(c.used_balance) + ' Usado';
+      homeCreditCard.querySelector('.credit-range span:last-child').textContent =
+        formatMoneyValue(c.credit_limit) + ' Límite';
+    }
 
-    // Update account tab
-    document.querySelector(
-      ".balance-amount + .progress-bar + div strong, .credit-limit-val"
-    ).textContent =
-      "$" +
-      parseFloat(c.credit_limit).toLocaleString("es-MX", {
-        minimumFractionDigits: 2,
-      });
+    // Update account tab limit label (full load happens in loadAccountTab)
+    const creditLimitVal = document.querySelector('.credit-limit-val');
+    if (creditLimitVal) {
+      creditLimitVal.textContent = formatMoneyValue(c.credit_limit);
+    }
   } catch (err) {
     console.error("Error loading account data:", err);
   }
@@ -102,11 +103,16 @@ async function loadAccountData() {
 }
 
 // Fetch account + transactions from the backend for this user
+function getPurchasePaymentStatusLabel(tx) {
+  if (tx.status === 'completed') return 'PAGO COMPLETADO';
+  return 'PAGO PENDIENTE';
+}
+
 function getActivityStatusLabel(tx) {
   if (tx.status === 'transfer_sent') return 'ENVIADA';
   if (tx.status === 'transfer_received') return 'RECIBIDA';
   if (getActivityKind(tx) === 'loan') return 'ACREDITADO';
-  if (tx.status === 'authorized') return tx.num_installments + ' QUINCENAS';
+  if (getActivityKind(tx) === 'purchase') return getPurchasePaymentStatusLabel(tx);
   if (tx.status === 'completed') return 'PAGADO';
   return String(tx.status || '').toUpperCase();
 }
@@ -114,7 +120,8 @@ function getActivityStatusLabel(tx) {
 function getActivityStatusClass(tx) {
   if (tx.status === 'transfer_received') return 'paid';
   if (getActivityKind(tx) === 'loan') return 'paid';
-  if (tx.status === 'transfer_sent') return 'pending';
+  if (getActivityKind(tx) === 'purchase' && tx.status === 'completed') return 'paid';
+  if (tx.status === 'transfer_sent') return 'paid';
   if (tx.status === 'completed') return 'paid';
   return 'pending';
 }
@@ -127,7 +134,7 @@ function getActivityIcon(tx) {
 
 function getActivityTypeLabel(tx) {
   if (tx.status === 'transfer_sent' || tx.status === 'transfer_received') return 'Transferencia';
-  if (getActivityKind(tx) === 'loan') return 'Préstamo';
+  if (getActivityKind(tx) === 'loan') return 'Acreditación';
   return 'Crédito';
 }
 
@@ -143,11 +150,11 @@ function escapeHtmlAttr(value) {
 }
 
 function getTransactionDetailStatus(tx) {
-  if (tx.status === 'completed') return 'PAGADO';
   if (tx.status === 'transfer_received') return 'RECIBIDA';
   if (tx.status === 'transfer_sent') return 'ENVIADA';
   if (getActivityKind(tx) === 'loan') return 'ACREDITADO';
-  if (tx.status === 'authorized') return 'PENDIENTE';
+  if (getActivityKind(tx) === 'purchase') return getPurchasePaymentStatusLabel(tx);
+  if (tx.status === 'completed') return 'PAGADO';
   return getActivityStatusLabel(tx);
 }
 
@@ -160,9 +167,17 @@ function getTransactionInstallmentsLabel(tx) {
   return `${tx.num_installments || 0} quincenas`;
 }
 
+function isLoanTransaction(tx) {
+  return tx.is_loan === true
+    || tx.is_loan === 't'
+    || tx.status === 'loaned'
+    || tx.merchant === 'Kueski Cash'
+    || tx.merchant === 'Préstamo demo';
+}
+
 function getActivityKind(tx) {
   if (tx.status === 'transfer_sent' || tx.status === 'transfer_received') return 'transfer';
-  if (tx.status === 'loaned' || tx.merchant === 'Préstamo demo') return 'loan';
+  if (isLoanTransaction(tx)) return 'loan';
   return 'purchase';
 }
 
@@ -175,20 +190,20 @@ function getActivityHeroTitle(tx, kind) {
   if (kind === 'transfer') {
     return tx.status === 'transfer_sent' ? 'Transferencia enviada' : 'Transferencia recibida';
   }
-  if (kind === 'loan') return 'Préstamo Kueski Cash';
+  if (kind === 'loan') return 'Kueski Cash';
   return tx.merchant || 'Kueski Pay';
 }
 
 function getActivityKindLabel(kind) {
   if (kind === 'transfer') return 'Transferencia';
-  if (kind === 'loan') return 'Préstamo';
+  if (kind === 'loan') return 'Kueski Cash';
   return 'Compra';
 }
 
 function setTransactionDetailBadge(status) {
   const badge = document.getElementById('txd-status-badge');
   badge.textContent = status || 'PENDIENTE';
-  const isPaid = ['PAGADO', 'RECIBIDA', 'ACREDITADO'].includes(status);
+  const isPaid = ['PAGADO', 'RECIBIDA', 'ENVIADA', 'ACREDITADO', 'PAGO COMPLETADO'].includes(status);
   badge.className = 'tx-detail-badge ' + (isPaid ? 'paid' : 'pending');
 }
 
@@ -347,9 +362,7 @@ async function loadAccountTab() {
       '$' + parseFloat(c.credit_limit).toLocaleString('es-MX', { minimumFractionDigits: 2 });
 
     // Update progress bar
-    const usedPct = c.credit_limit > 0
-      ? Math.round((parseFloat(c.used_balance) / parseFloat(c.credit_limit)) * 100)
-      : 0;
+    const usedPct = getCreditUsagePercent(c.used_balance, c.credit_limit);
     document.querySelector('#tab-account .progress-fill').style.width = usedPct + '%';
 
   } catch (err) {
@@ -512,17 +525,22 @@ async function loadReminders() {
       const badge = getReminderBadge(item.due_date, isPaid);
       const badgeClass =
         badge.status === 'paid' ? 'badge-paid' : badge.status === 'danger' ? 'badge-danger' : 'badge-warning';
-      const dateText = isPaid ? 'Pagado' : `Vence ${formatReminderDate(item.due_date)}`;
+      const dateText = isPaid
+        ? 'Pagado'
+        : `Quincena ${item.installment_no} de ${item.num_installments} · Vence ${formatReminderDate(item.due_date)}`;
       const amount = parseFloat(item.amount);
 
       return `
         <div class="reminder-row">
           <div class="reminder-info">
-            <strong>${item.merchant}</strong>
+            <strong>${escapeHtmlAttr(item.merchant)}</strong>
             <span class="reminder-amount">$${amount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
             <span class="reminder-date">${dateText}</span>
           </div>
-          <span class="reminder-badge ${badgeClass}">${badge.label}</span>
+          <div class="reminder-actions">
+            <span class="reminder-badge ${badgeClass}">${badge.label}</span>
+            ${isPaid ? '' : `<button class="btn-reminder-pay" type="button" data-action="pay-installment" data-installment-id="${item.id}">Pagar</button>`}
+          </div>
         </div>
       `;
     }).join('');
@@ -539,6 +557,38 @@ function openReminders() {
 
 function closeReminders() {
   document.getElementById('reminders-overlay').classList.add('hidden');
+}
+
+async function payInstallment(installmentId) {
+  if (!currentUserEmail || !installmentId) return;
+
+  try {
+    const res = await fetch('http://localhost:3000/api/recordatorios/pagar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: currentUserEmail,
+        installment_id: parseInt(installmentId, 10),
+      }),
+    });
+    const data = await res.json();
+
+    if (!data.ok) {
+      alert(data.error || 'No se pudo procesar el pago');
+      return;
+    }
+
+    await loadReminders();
+    await loadAccountData();
+    await loadActivityData();
+
+    if (data.pago?.transaction_completed) {
+      alert(`Cuota pagada. ¡Compra en ${data.pago.merchant} liquidada por completo!`);
+    }
+  } catch (err) {
+    console.error('Error paying installment:', err);
+    alert('Error de conexión al pagar la cuota');
+  }
 }
 
 // ===== USER TRANSFERS =====
@@ -804,6 +854,9 @@ document.addEventListener("DOMContentLoaded", () => {
         break;
       case "close-reminders":
         closeReminders();
+        break;
+      case "pay-installment":
+        payInstallment(actionEl.dataset.installmentId);
         break;
       case "open-transfer":
         openTransfer();
