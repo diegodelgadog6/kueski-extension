@@ -121,7 +121,7 @@
           <span class="brand-name">Kueski</span>
         </div>
         <div class="header-actions">
-          <button class="icon-btn" data-action="switch-tab" data-tab="account"><span class="material-symbols-outlined">notifications</span></button>
+          <button class="icon-btn" data-action="open-reminders"><span class="material-symbols-outlined">notifications</span></button>
           <button class="icon-btn" data-action="switch-tab" data-tab="account"><span class="material-symbols-outlined">settings</span></button>
         </div>
       </header>
@@ -552,6 +552,19 @@
         <button class="btn-primary" data-action="close-coupon-detail">Comprar en línea <span class="material-symbols-outlined tiny">arrow_forward</span></button>
       </div>
     </div>
+    <!-- ==================== PAYMENT REMINDERS OVERLAY ==================== -->
+    <div id="reminders-overlay" class="overlay hidden">
+      <div class="overlay-card">
+        <div class="overlay-header">
+          <h2 class="reminders-title">Recordatorios de pagos</h2>
+          <button class="icon-btn" data-action="close-reminders">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div id="reminders-list" class="reminders-list"></div>
+      </div>
+    </div>
+
     <!-- ==================== CHECKOUT OVERLAY ==================== -->
     <div id="checkout-overlay" class="overlay hidden">
       <div class="overlay-card">

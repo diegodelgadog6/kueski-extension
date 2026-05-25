@@ -272,6 +272,119 @@ function closeCouponDetail() {
   document.getElementById("coupon-overlay").classList.add("hidden");
 }
 
+// ===== PAYMENT REMINDERS =====
+function parseDueDate(value) {
+  if (!value) return null;
+
+  if (value instanceof Date) {
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  }
+
+  const str = String(value);
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  }
+
+  const parsed = new Date(str);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+}
+
+function getReminderBadge(dueDate, isPaid) {
+  if (isPaid) {
+    return { status: 'paid', label: 'Pagado' };
+  }
+
+  const due = parseDueDate(dueDate);
+  if (!due) {
+    return { status: 'warning', label: 'Fecha pendiente' };
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((due - today) / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    return { status: 'danger', label: 'Vencido' };
+  }
+  if (diffDays === 0) {
+    return { status: 'danger', label: 'Vence hoy' };
+  }
+  if (diffDays === 1) {
+    return { status: 'danger', label: 'Vence mañana' };
+  }
+  return { status: 'warning', label: `Vence en ${diffDays} días` };
+}
+
+function formatReminderDate(dueDate) {
+  const date = parseDueDate(dueDate);
+  if (!date) return 'Fecha no disponible';
+  return date.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+async function loadReminders() {
+  const list = document.getElementById('reminders-list');
+  if (!list) return;
+
+  if (!currentUserEmail) {
+    list.innerHTML = '<p class="reminders-empty">Inicia sesión para ver tus recordatorios</p>';
+    return;
+  }
+
+  list.innerHTML = '<p class="reminders-empty">Cargando recordatorios...</p>';
+
+  try {
+    const res = await fetch(
+      `http://localhost:3000/api/recordatorios?email=${encodeURIComponent(currentUserEmail)}`
+    );
+    const data = await res.json();
+
+    if (!data.ok) {
+      list.innerHTML = '<p class="reminders-empty">No se pudieron cargar los recordatorios</p>';
+      return;
+    }
+
+    if (!data.recordatorios || data.recordatorios.length === 0) {
+      list.innerHTML =
+        '<p class="reminders-empty">No tienes pagos próximos. Realiza una compra con Kueski Pay para ver recordatorios aquí.</p>';
+      return;
+    }
+
+    list.innerHTML = data.recordatorios.map((item) => {
+      const isPaid = item.status === 'paid' || item.paid_at != null;
+      const badge = getReminderBadge(item.due_date, isPaid);
+      const badgeClass =
+        badge.status === 'paid' ? 'badge-paid' : badge.status === 'danger' ? 'badge-danger' : 'badge-warning';
+      const dateText = isPaid ? 'Pagado' : `Vence ${formatReminderDate(item.due_date)}`;
+      const amount = parseFloat(item.amount);
+
+      return `
+        <div class="reminder-row">
+          <div class="reminder-info">
+            <strong>${item.merchant}</strong>
+            <span class="reminder-amount">$${amount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+            <span class="reminder-date">${dateText}</span>
+          </div>
+          <span class="reminder-badge ${badgeClass}">${badge.label}</span>
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error('Error loading reminders:', err);
+    list.innerHTML = '<p class="reminders-empty">No se pudo conectar al servidor</p>';
+  }
+}
+
+function openReminders() {
+  document.getElementById('reminders-overlay').classList.remove('hidden');
+  loadReminders();
+}
+
+function closeReminders() {
+  document.getElementById('reminders-overlay').classList.add('hidden');
+}
+
 // ===== COPY COUPON CODE =====
 function copyCode() {
   const code = document.getElementById("cd-code").textContent;
@@ -390,6 +503,12 @@ document.addEventListener("DOMContentLoaded", () => {
           break;
       case "close-coupon-detail":
         closeCouponDetail();
+        break;
+      case "open-reminders":
+        openReminders();
+        break;
+      case "close-reminders":
+        closeReminders();
         break;
       case "copy-code":
         copyCode();
@@ -668,6 +787,9 @@ async function checkoutConfirm() {
 
 // ===== CLOSE OVERLAY ON BACKDROP CLICK =====
 document.addEventListener("click", (e) => {
-  const overlay = document.getElementById("coupon-overlay");
-  if (e.target === overlay) closeCouponDetail();
+  const couponOverlay = document.getElementById("coupon-overlay");
+  if (e.target === couponOverlay) closeCouponDetail();
+
+  const remindersOverlay = document.getElementById("reminders-overlay");
+  if (e.target === remindersOverlay) closeReminders();
 });
