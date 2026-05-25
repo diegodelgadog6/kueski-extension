@@ -128,6 +128,69 @@ function getActivityTypeLabel(tx) {
   return 'Crédito';
 }
 
+function formatMoneyValue(amount) {
+  return '$' + parseFloat(amount || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 });
+}
+
+function escapeHtmlAttr(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;');
+}
+
+function getTransactionDetailStatus(tx) {
+  if (tx.status === 'completed') return 'PAGADO';
+  if (tx.status === 'transfer_received') return 'RECIBIDA';
+  if (tx.status === 'transfer_sent') return 'ENVIADA';
+  if (tx.status === 'loaned') return 'PRÉSTAMO';
+  if (tx.status === 'authorized') return 'PENDIENTE';
+  return getActivityStatusLabel(tx);
+}
+
+function getTransactionDetailMethod(tx) {
+  if (tx.status === 'transfer_sent' || tx.status === 'transfer_received') {
+    return 'Transferencia Kueski Pay';
+  }
+  return 'Kueski Pay - Crédito';
+}
+
+function getTransactionCouponLabel(tx) {
+  return tx.coupon_label || 'Ninguno';
+}
+
+function getTransactionInstallmentsLabel(tx) {
+  if (tx.status === 'transfer_sent' || tx.status === 'transfer_received' || tx.status === 'loaned') {
+    return '1 pago';
+  }
+  return `${tx.num_installments} quincenas`;
+}
+
+function showTransactionDetail(row) {
+  const d = row.dataset;
+
+  document.getElementById('txd-store').textContent = d.store || 'Kueski Pay';
+  document.getElementById('txd-date').textContent = d.date || '';
+  document.getElementById('txd-original').textContent = d.original || d.amount || '$0.00';
+  document.getElementById('txd-coupon').textContent = d.coupon || 'Ninguno';
+  document.getElementById('txd-savings').textContent = d.savings || '$0.00';
+  document.getElementById('txd-amount').textContent = d.amount || '$0.00';
+  document.getElementById('txd-installments').textContent = d.installments || '—';
+  document.getElementById('txd-installment-amount').textContent = d.installmentAmount || '$0.00';
+  document.getElementById('txd-method').textContent = d.method || 'Kueski Pay - Crédito';
+
+  const badge = document.getElementById('txd-status-badge');
+  badge.textContent = d.status || 'PENDIENTE';
+  const isPaid = ['PAGADO', 'RECIBIDA'].includes(d.status);
+  badge.className = 'tx-detail-badge ' + (isPaid ? 'paid' : 'pending');
+
+  document.getElementById('transaction-overlay').classList.remove('hidden');
+}
+
+function closeTransactionDetail() {
+  document.getElementById('transaction-overlay').classList.add('hidden');
+}
+
 async function loadActivityData() {
   const email = currentUserEmail;
   if (!email) return;
@@ -162,27 +225,40 @@ async function loadActivityData() {
 
     // Build a row for each transaction returned by the API
     list.innerHTML = txs
-      .map(
-        (tx) => `
-      <div class="transaction-row">
+      .map((tx) => {
+        const statusLabel = getTransactionDetailStatus(tx);
+        const formattedDate = new Date(tx.created_at).toLocaleDateString('es-MX', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric'
+        });
+
+        return `
+      <div class="transaction-row" data-action="transaction-detail"
+        data-store="${escapeHtmlAttr(tx.merchant || 'Kueski Pay')}"
+        data-date="${escapeHtmlAttr(formattedDate)}"
+        data-original="${escapeHtmlAttr(formatMoneyValue(tx.original_amount))}"
+        data-amount="${escapeHtmlAttr(formatMoneyValue(tx.total_amount))}"
+        data-status="${escapeHtmlAttr(statusLabel)}"
+        data-method="${escapeHtmlAttr(getTransactionDetailMethod(tx))}"
+        data-installments="${escapeHtmlAttr(getTransactionInstallmentsLabel(tx))}"
+        data-installment-amount="${escapeHtmlAttr(formatMoneyValue(tx.amount_per_installment))}"
+        data-coupon="${escapeHtmlAttr(getTransactionCouponLabel(tx))}"
+        data-savings="${escapeHtmlAttr(formatMoneyValue(tx.discount_amount))}">
         <div class="tx-icon">${getActivityIcon(tx)}</div>
         <div class="tx-info">
           <strong>${tx.merchant || "Kueski Pay"}</strong>
-          <span>${new Date(tx.created_at).toLocaleDateString(
-            "es-MX"
-          )} • ${getActivityTypeLabel(tx)}</span>
+          <span>${formattedDate} • ${getActivityTypeLabel(tx)}</span>
         </div>
         <div class="tx-amount">
-          <strong>$${parseFloat(tx.total_amount).toLocaleString("es-MX", {
-            minimumFractionDigits: 2,
-          })}</strong>
+          <strong>${formatMoneyValue(tx.total_amount)}</strong>
           <span class="tx-status ${getActivityStatusClass(tx)}">
             ${getActivityStatusLabel(tx)}
           </span>
         </div>
       </div>
-    `
-      )
+    `;
+      })
       .join("");
   } catch (err) {
     console.error("Error loading activity:", err);
@@ -691,6 +767,12 @@ document.addEventListener("DOMContentLoaded", () => {
       case "copy-code":
         copyCode();
         break;
+      case "transaction-detail":
+        showTransactionDetail(actionEl);
+        break;
+      case "close-transaction-detail":
+        closeTransactionDetail();
+        break;
 
       // Clear session and return to login
       case 'logout':
@@ -973,4 +1055,7 @@ document.addEventListener("click", (e) => {
 
   const transferOverlay = document.getElementById("transfer-overlay");
   if (e.target === transferOverlay) closeTransfer();
+
+  const transactionOverlay = document.getElementById("transaction-overlay");
+  if (e.target === transactionOverlay) closeTransactionDetail();
 });

@@ -384,12 +384,14 @@ app.get('/api/cuenta', async (req, res) => {
       SELECT * FROM (
         SELECT t.id, t.total_amount, t.original_amount, t.discount_amount,
                t.amount_per_installment, pp.num_installments, t.status, t.created_at,
-               COALESCE(m.name, CASE WHEN t.status = 'loaned' THEN 'Préstamo demo' ELSE 'Kueski Pay' END) AS merchant
+               COALESCE(m.name, CASE WHEN t.status = 'loaned' THEN 'Préstamo demo' ELSE 'Kueski Pay' END) AS merchant,
+               CASE WHEN c.code IS NOT NULL THEN c.code || ' - ' || c.discount ELSE NULL END AS coupon_label
         FROM transactions t
         JOIN kueski_accounts ka ON ka.id = t.account_id
         JOIN users u            ON u.id  = ka.user_id
         JOIN payment_plans pp   ON pp.id = t.plan_id
         LEFT JOIN merchants m   ON m.id  = t.merchant_id
+        LEFT JOIN coupons c     ON c.id  = t.coupon_id
         WHERE u.email = $1
 
         UNION ALL
@@ -401,7 +403,8 @@ app.get('/api/cuenta', async (req, res) => {
                CASE
                  WHEN ut.from_account_id = ka.id THEN 'Transferencia a ' || u_to.name
                  ELSE 'Transferencia de ' || u_from.name
-               END
+               END,
+               NULL AS coupon_label
         FROM user_transfers ut
         JOIN kueski_accounts ka ON ka.id = ut.from_account_id OR ka.id = ut.to_account_id
         JOIN users u ON u.id = ka.user_id
