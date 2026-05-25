@@ -149,7 +149,7 @@ app.post('/api/prestamo-demo', async (req, res) => {
     const transactionResult = await client.query(`
       INSERT INTO transactions
         (account_id, plan_id, merchant_id, original_amount, discount_amount, total_amount, amount_per_installment, status)
-      VALUES ($1, $2, NULL, $3, 0, $3, $3, 'authorized')
+      VALUES ($1, $2, NULL, $3, 0, $3, $3, 'loaned')
       RETURNING id, created_at
     `, [account.id, planId, parsedAmount.toFixed(2)]);
 
@@ -385,7 +385,11 @@ app.get('/api/cuenta', async (req, res) => {
         SELECT t.id, t.total_amount, t.original_amount, t.discount_amount,
                t.amount_per_installment, pp.num_installments, t.status, t.created_at,
                COALESCE(m.name, CASE WHEN t.status = 'loaned' THEN 'Préstamo demo' ELSE 'Kueski Pay' END) AS merchant,
-               CASE WHEN c.code IS NOT NULL THEN c.code || ' - ' || c.discount ELSE NULL END AS coupon_label
+               CASE WHEN c.code IS NOT NULL THEN c.code || ' - ' || c.discount ELSE NULL END AS coupon_label,
+               NULL::text AS transfer_from_name,
+               NULL::text AS transfer_from_email,
+               NULL::text AS transfer_to_name,
+               NULL::text AS transfer_to_email
         FROM transactions t
         JOIN kueski_accounts ka ON ka.id = t.account_id
         JOIN users u            ON u.id  = ka.user_id
@@ -404,7 +408,11 @@ app.get('/api/cuenta', async (req, res) => {
                  WHEN ut.from_account_id = ka.id THEN 'Transferencia a ' || u_to.name
                  ELSE 'Transferencia de ' || u_from.name
                END,
-               NULL AS coupon_label
+               NULL AS coupon_label,
+               u_from.name AS transfer_from_name,
+               u_from.email AS transfer_from_email,
+               u_to.name AS transfer_to_name,
+               u_to.email AS transfer_to_email
         FROM user_transfers ut
         JOIN kueski_accounts ka ON ka.id = ut.from_account_id OR ka.id = ut.to_account_id
         JOIN users u ON u.id = ka.user_id

@@ -1266,6 +1266,19 @@ body {
   margin-bottom: 16px;
 }
 
+.tx-detail-kind {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+  margin-bottom: 6px;
+}
+
+.tx-detail-panel.hidden {
+  display: none;
+}
+
 .tx-detail-store {
   font-size: 22px;
   font-weight: 800;
@@ -1333,6 +1346,13 @@ body {
   color: var(--on-surface);
   font-weight: 700;
   text-align: right;
+}
+
+.tx-detail-row strong.tx-detail-person {
+  font-size: 12px;
+  line-height: 1.4;
+  max-width: 62%;
+  white-space: pre-line;
 }
 
 .tx-detail-row-total strong {

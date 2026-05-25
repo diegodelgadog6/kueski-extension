@@ -105,7 +105,7 @@ async function loadAccountData() {
 function getActivityStatusLabel(tx) {
   if (tx.status === 'transfer_sent') return 'ENVIADA';
   if (tx.status === 'transfer_received') return 'RECIBIDA';
-  if (tx.status === 'loaned') return 'PRÉSTAMO';
+  if (getActivityKind(tx) === 'loan') return 'ACREDITADO';
   if (tx.status === 'authorized') return tx.num_installments + ' QUINCENAS';
   if (tx.status === 'completed') return 'PAGADO';
   return String(tx.status || '').toUpperCase();
@@ -113,6 +113,7 @@ function getActivityStatusLabel(tx) {
 
 function getActivityStatusClass(tx) {
   if (tx.status === 'transfer_received') return 'paid';
+  if (getActivityKind(tx) === 'loan') return 'paid';
   if (tx.status === 'transfer_sent') return 'pending';
   if (tx.status === 'completed') return 'paid';
   return 'pending';
@@ -120,11 +121,13 @@ function getActivityStatusClass(tx) {
 
 function getActivityIcon(tx) {
   if (tx.status === 'transfer_sent' || tx.status === 'transfer_received') return '💸';
+  if (getActivityKind(tx) === 'loan') return '💰';
   return '🛒';
 }
 
 function getActivityTypeLabel(tx) {
   if (tx.status === 'transfer_sent' || tx.status === 'transfer_received') return 'Transferencia';
+  if (getActivityKind(tx) === 'loan') return 'Préstamo';
   return 'Crédito';
 }
 
@@ -143,16 +146,9 @@ function getTransactionDetailStatus(tx) {
   if (tx.status === 'completed') return 'PAGADO';
   if (tx.status === 'transfer_received') return 'RECIBIDA';
   if (tx.status === 'transfer_sent') return 'ENVIADA';
-  if (tx.status === 'loaned') return 'PRÉSTAMO';
+  if (getActivityKind(tx) === 'loan') return 'ACREDITADO';
   if (tx.status === 'authorized') return 'PENDIENTE';
   return getActivityStatusLabel(tx);
-}
-
-function getTransactionDetailMethod(tx) {
-  if (tx.status === 'transfer_sent' || tx.status === 'transfer_received') {
-    return 'Transferencia Kueski Pay';
-  }
-  return 'Kueski Pay - Crédito';
 }
 
 function getTransactionCouponLabel(tx) {
@@ -160,29 +156,78 @@ function getTransactionCouponLabel(tx) {
 }
 
 function getTransactionInstallmentsLabel(tx) {
-  if (tx.status === 'transfer_sent' || tx.status === 'transfer_received' || tx.status === 'loaned') {
-    return '1 pago';
+  if (getActivityKind(tx) !== 'purchase') return '';
+  return `${tx.num_installments || 0} quincenas`;
+}
+
+function getActivityKind(tx) {
+  if (tx.status === 'transfer_sent' || tx.status === 'transfer_received') return 'transfer';
+  if (tx.status === 'loaned' || tx.merchant === 'Préstamo demo') return 'loan';
+  return 'purchase';
+}
+
+function formatPersonLabel(name, email) {
+  if (name && email) return `${name}\n${email}`;
+  return name || email || '—';
+}
+
+function getActivityHeroTitle(tx, kind) {
+  if (kind === 'transfer') {
+    return tx.status === 'transfer_sent' ? 'Transferencia enviada' : 'Transferencia recibida';
   }
-  return `${tx.num_installments} quincenas`;
+  if (kind === 'loan') return 'Préstamo Kueski Cash';
+  return tx.merchant || 'Kueski Pay';
+}
+
+function getActivityKindLabel(kind) {
+  if (kind === 'transfer') return 'Transferencia';
+  if (kind === 'loan') return 'Préstamo';
+  return 'Compra';
+}
+
+function setTransactionDetailBadge(status) {
+  const badge = document.getElementById('txd-status-badge');
+  badge.textContent = status || 'PENDIENTE';
+  const isPaid = ['PAGADO', 'RECIBIDA', 'ACREDITADO'].includes(status);
+  badge.className = 'tx-detail-badge ' + (isPaid ? 'paid' : 'pending');
 }
 
 function showTransactionDetail(row) {
   const d = row.dataset;
+  const kind = d.type || 'purchase';
 
+  document.getElementById('txd-kind').textContent = getActivityKindLabel(kind);
   document.getElementById('txd-store').textContent = d.store || 'Kueski Pay';
   document.getElementById('txd-date').textContent = d.date || '';
-  document.getElementById('txd-original').textContent = d.original || d.amount || '$0.00';
-  document.getElementById('txd-coupon').textContent = d.coupon || 'Ninguno';
-  document.getElementById('txd-savings').textContent = d.savings || '$0.00';
-  document.getElementById('txd-amount').textContent = d.amount || '$0.00';
-  document.getElementById('txd-installments').textContent = d.installments || '—';
-  document.getElementById('txd-installment-amount').textContent = d.installmentAmount || '$0.00';
-  document.getElementById('txd-method').textContent = d.method || 'Kueski Pay - Crédito';
+  setTransactionDetailBadge(d.status);
 
-  const badge = document.getElementById('txd-status-badge');
-  badge.textContent = d.status || 'PENDIENTE';
-  const isPaid = ['PAGADO', 'RECIBIDA'].includes(d.status);
-  badge.className = 'tx-detail-badge ' + (isPaid ? 'paid' : 'pending');
+  document.getElementById('txd-purchase-details').classList.add('hidden');
+  document.getElementById('txd-transfer-details').classList.add('hidden');
+  document.getElementById('txd-loan-details').classList.add('hidden');
+
+  if (kind === 'purchase') {
+    document.getElementById('txd-original').textContent = d.original || d.amount || '$0.00';
+    document.getElementById('txd-coupon').textContent = d.coupon || 'Ninguno';
+    document.getElementById('txd-savings').textContent = d.savings || '$0.00';
+    document.getElementById('txd-amount').textContent = d.amount || '$0.00';
+    document.getElementById('txd-installments').textContent = d.installments || '—';
+    document.getElementById('txd-installment-amount').textContent = d.installmentAmount || '$0.00';
+    document.getElementById('txd-method').textContent = d.method || 'Kueski Pay - Crédito';
+    document.getElementById('txd-purchase-details').classList.remove('hidden');
+  } else if (kind === 'transfer') {
+    const isSent = d.status === 'ENVIADA';
+    document.getElementById('txd-transfer-type').textContent = isSent ? 'Enviada' : 'Recibida';
+    document.getElementById('txd-transfer-from').textContent =
+      formatPersonLabel(d.fromName, d.fromEmail);
+    document.getElementById('txd-transfer-to').textContent =
+      formatPersonLabel(d.toName, d.toEmail);
+    document.getElementById('txd-transfer-amount').textContent = d.amount || '$0.00';
+    document.getElementById('txd-transfer-details').classList.remove('hidden');
+  } else if (kind === 'loan') {
+    document.getElementById('txd-loan-amount').textContent = d.amount || '$0.00';
+    document.getElementById('txd-loan-status').textContent = 'Acreditado';
+    document.getElementById('txd-loan-details').classList.remove('hidden');
+  }
 
   document.getElementById('transaction-overlay').classList.remove('hidden');
 }
@@ -206,9 +251,13 @@ async function loadActivityData() {
     // Calculate real totals from DB activity (exclude incoming transfers from "gastado")
     const totalSpent = txs.reduce((sum, tx) => {
       if (tx.status === 'transfer_received') return sum;
+      if (getActivityKind(tx) === 'loan') return sum;
       return sum + parseFloat(tx.total_amount);
     }, 0);
-    const totalSaved = txs.reduce((sum, tx) => sum + parseFloat(tx.discount_amount || 0), 0);
+    const totalSaved = txs.reduce((sum, tx) => {
+      if (getActivityKind(tx) !== 'purchase') return sum;
+      return sum + parseFloat(tx.discount_amount || 0);
+    }, 0);
 
     // Update stat cards with real data
     document.querySelector('.stat-card.stat-primary .stat-value').textContent =
@@ -226,25 +275,32 @@ async function loadActivityData() {
     // Build a row for each transaction returned by the API
     list.innerHTML = txs
       .map((tx) => {
+        const kind = getActivityKind(tx);
         const statusLabel = getTransactionDetailStatus(tx);
         const formattedDate = new Date(tx.created_at).toLocaleDateString('es-MX', {
           day: 'numeric',
           month: 'short',
           year: 'numeric'
         });
+        const heroTitle = getActivityHeroTitle(tx, kind);
 
         return `
       <div class="transaction-row" data-action="transaction-detail"
-        data-store="${escapeHtmlAttr(tx.merchant || 'Kueski Pay')}"
+        data-type="${escapeHtmlAttr(kind)}"
+        data-store="${escapeHtmlAttr(heroTitle)}"
         data-date="${escapeHtmlAttr(formattedDate)}"
         data-original="${escapeHtmlAttr(formatMoneyValue(tx.original_amount))}"
         data-amount="${escapeHtmlAttr(formatMoneyValue(tx.total_amount))}"
         data-status="${escapeHtmlAttr(statusLabel)}"
-        data-method="${escapeHtmlAttr(getTransactionDetailMethod(tx))}"
+        data-method="Kueski Pay - Crédito"
         data-installments="${escapeHtmlAttr(getTransactionInstallmentsLabel(tx))}"
         data-installment-amount="${escapeHtmlAttr(formatMoneyValue(tx.amount_per_installment))}"
         data-coupon="${escapeHtmlAttr(getTransactionCouponLabel(tx))}"
-        data-savings="${escapeHtmlAttr(formatMoneyValue(tx.discount_amount))}">
+        data-savings="${escapeHtmlAttr(formatMoneyValue(tx.discount_amount))}"
+        data-from-name="${escapeHtmlAttr(tx.transfer_from_name || '')}"
+        data-from-email="${escapeHtmlAttr(tx.transfer_from_email || '')}"
+        data-to-name="${escapeHtmlAttr(tx.transfer_to_name || '')}"
+        data-to-email="${escapeHtmlAttr(tx.transfer_to_email || '')}">
         <div class="tx-icon">${getActivityIcon(tx)}</div>
         <div class="tx-info">
           <strong>${tx.merchant || "Kueski Pay"}</strong>
