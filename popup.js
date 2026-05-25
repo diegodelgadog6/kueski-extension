@@ -64,12 +64,15 @@ async function loadAccountData() {
 
     const c = data.cuenta;
 
-    // Update balance
-    document.querySelector(".balance-amount").textContent =
-      "$" +
-      parseFloat(c.available_balance).toLocaleString("es-MX", {
-        minimumFractionDigits: 2,
-      });
+    // Update balance (Home tab)
+    const homeBalance = document.querySelector('#tab-home .balance-amount');
+    if (homeBalance) {
+      homeBalance.textContent =
+        '$' +
+        parseFloat(c.available_balance).toLocaleString('es-MX', {
+          minimumFractionDigits: 2,
+        });
+    }
 
     // Update credit card bar
     const usedPct = parseFloat(c.credit_limit) > 0
@@ -99,6 +102,32 @@ async function loadAccountData() {
 }
 
 // Fetch account + transactions from the backend for this user
+function getActivityStatusLabel(tx) {
+  if (tx.status === 'transfer_sent') return 'ENVIADA';
+  if (tx.status === 'transfer_received') return 'RECIBIDA';
+  if (tx.status === 'loaned') return 'PRÉSTAMO';
+  if (tx.status === 'authorized') return tx.num_installments + ' QUINCENAS';
+  if (tx.status === 'completed') return 'PAGADO';
+  return String(tx.status || '').toUpperCase();
+}
+
+function getActivityStatusClass(tx) {
+  if (tx.status === 'transfer_received') return 'paid';
+  if (tx.status === 'transfer_sent') return 'pending';
+  if (tx.status === 'completed') return 'paid';
+  return 'pending';
+}
+
+function getActivityIcon(tx) {
+  if (tx.status === 'transfer_sent' || tx.status === 'transfer_received') return '💸';
+  return '🛒';
+}
+
+function getActivityTypeLabel(tx) {
+  if (tx.status === 'transfer_sent' || tx.status === 'transfer_received') return 'Transferencia';
+  return 'Crédito';
+}
+
 async function loadActivityData() {
   const email = currentUserEmail;
   if (!email) return;
@@ -111,8 +140,11 @@ async function loadActivityData() {
     const txs = data.ultimas_transacciones;
     const list = document.querySelector(".transactions-list");
 
-    // Calculate real totals from DB transactions
-    const totalSpent = txs.reduce((sum, tx) => sum + parseFloat(tx.total_amount), 0);
+    // Calculate real totals from DB activity (exclude incoming transfers from "gastado")
+    const totalSpent = txs.reduce((sum, tx) => {
+      if (tx.status === 'transfer_received') return sum;
+      return sum + parseFloat(tx.total_amount);
+    }, 0);
     const totalSaved = txs.reduce((sum, tx) => sum + parseFloat(tx.discount_amount || 0), 0);
 
     // Update stat cards with real data
@@ -133,27 +165,19 @@ async function loadActivityData() {
       .map(
         (tx) => `
       <div class="transaction-row">
-        <div class="tx-icon">🛒</div>
+        <div class="tx-icon">${getActivityIcon(tx)}</div>
         <div class="tx-info">
           <strong>${tx.merchant || "Kueski Pay"}</strong>
           <span>${new Date(tx.created_at).toLocaleDateString(
             "es-MX"
-          )} • Crédito</span>
+          )} • ${getActivityTypeLabel(tx)}</span>
         </div>
         <div class="tx-amount">
           <strong>$${parseFloat(tx.total_amount).toLocaleString("es-MX", {
             minimumFractionDigits: 2,
           })}</strong>
-          <span class="tx-status ${
-            tx.status === "completed" ? "paid" : "pending"
-          }">
-            ${
-              tx.status === "loaned"
-                ? "PRÉSTAMO"
-                : tx.status === "authorized"
-                ? tx.num_installments + " QUINCENAS"
-                : tx.status.toUpperCase()
-            }
+          <span class="tx-status ${getActivityStatusClass(tx)}">
+            ${getActivityStatusLabel(tx)}
           </span>
         </div>
       </div>
@@ -385,6 +409,145 @@ function closeReminders() {
   document.getElementById('reminders-overlay').classList.add('hidden');
 }
 
+// ===== USER TRANSFERS =====
+let visualTransferBalance = 4850;
+let pendingTransfer = { recipient: '', amount: 0 };
+
+function parseBalanceAmount(text) {
+  return parseFloat(String(text).replace(/[$,\s]/g, '')) || 0;
+}
+
+function formatBalanceAmount(amount) {
+  return '$' + amount.toLocaleString('es-MX', { minimumFractionDigits: 2 });
+}
+
+function resetTransferSteps() {
+  document.getElementById('transfer-step-form').classList.remove('hidden');
+  document.getElementById('transfer-step-confirm').classList.add('hidden');
+  document.getElementById('transfer-step-success').classList.add('hidden');
+  document.getElementById('transfer-recipient').value = '';
+  document.getElementById('transfer-amount').value = '';
+}
+
+function openTransfer() {
+  resetTransferSteps();
+  document.getElementById('transfer-overlay').classList.remove('hidden');
+  refreshTransferBalance();
+}
+
+async function refreshTransferBalance() {
+  const display = document.getElementById('transfer-balance-display');
+  if (!currentUserEmail) {
+    display.textContent = 'Saldo disponible: $0.00';
+    visualTransferBalance = 0;
+    return;
+  }
+
+  display.textContent = 'Saldo disponible: cargando...';
+
+  try {
+    const res = await fetch(
+      `http://localhost:3000/api/cuenta?email=${encodeURIComponent(currentUserEmail)}`
+    );
+    const data = await res.json();
+
+    if (!data.ok) {
+      display.textContent = 'Saldo disponible: no disponible';
+      return;
+    }
+
+    visualTransferBalance = parseFloat(data.cuenta.available_balance);
+    display.textContent = 'Saldo disponible: ' + formatBalanceAmount(visualTransferBalance);
+  } catch (err) {
+    console.error('Error loading transfer balance:', err);
+    display.textContent = 'Saldo disponible: no disponible';
+  }
+}
+
+function closeTransfer() {
+  document.getElementById('transfer-overlay').classList.add('hidden');
+  resetTransferSteps();
+}
+
+function submitTransfer() {
+  const recipient = document.getElementById('transfer-recipient').value.trim();
+  const amount = parseFloat(document.getElementById('transfer-amount').value);
+
+  if (!recipient) {
+    alert('Ingresa el email o nombre del destinatario');
+    return;
+  }
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    alert('Ingresa un monto válido');
+    return;
+  }
+
+  if (amount > visualTransferBalance) {
+    alert('El monto supera tu saldo disponible');
+    return;
+  }
+
+  pendingTransfer = { recipient, amount };
+  document.getElementById('transfer-confirm-text').textContent =
+    `¿Enviar ${formatBalanceAmount(amount)} a ${recipient}?`;
+
+  document.getElementById('transfer-step-form').classList.add('hidden');
+  document.getElementById('transfer-step-confirm').classList.remove('hidden');
+}
+
+function cancelTransfer() {
+  document.getElementById('transfer-step-confirm').classList.add('hidden');
+  document.getElementById('transfer-step-form').classList.remove('hidden');
+}
+
+async function confirmTransfer() {
+  if (!currentUserEmail) {
+    alert('Inicia sesión primero');
+    return;
+  }
+
+  const confirmBtn = document.querySelector('[data-action="transfer-confirm"]');
+  if (confirmBtn) {
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Procesando...';
+  }
+
+  try {
+    const res = await fetch('http://localhost:3000/api/transferencias', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from_email: currentUserEmail,
+        to: pendingTransfer.recipient,
+        amount: pendingTransfer.amount
+      })
+    });
+
+    const data = await res.json();
+
+    if (!data.ok) {
+      alert(data.error || 'No se pudo completar la transferencia');
+      return;
+    }
+
+    await loadAccountData();
+    await loadAccountTab();
+    await loadActivityData();
+
+    document.getElementById('transfer-step-confirm').classList.add('hidden');
+    document.getElementById('transfer-step-success').classList.remove('hidden');
+  } catch (err) {
+    console.error('Transfer error:', err);
+    alert('No se pudo conectar al servidor');
+  } finally {
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = 'Confirmar';
+    }
+  }
+}
+
 // ===== COPY COUPON CODE =====
 function copyCode() {
   const code = document.getElementById("cd-code").textContent;
@@ -509,6 +672,21 @@ document.addEventListener("DOMContentLoaded", () => {
         break;
       case "close-reminders":
         closeReminders();
+        break;
+      case "open-transfer":
+        openTransfer();
+        break;
+      case "close-transfer":
+        closeTransfer();
+        break;
+      case "transfer-submit":
+        submitTransfer();
+        break;
+      case "transfer-confirm":
+        confirmTransfer();
+        break;
+      case "transfer-cancel":
+        cancelTransfer();
         break;
       case "copy-code":
         copyCode();
@@ -792,4 +970,7 @@ document.addEventListener("click", (e) => {
 
   const remindersOverlay = document.getElementById("reminders-overlay");
   if (e.target === remindersOverlay) closeReminders();
+
+  const transferOverlay = document.getElementById("transfer-overlay");
+  if (e.target === transferOverlay) closeTransfer();
 });

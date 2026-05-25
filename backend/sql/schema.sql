@@ -78,6 +78,14 @@ CREATE TABLE IF NOT EXISTS installments (
   UNIQUE(transaction_id, installment_no)
 );
 
+CREATE TABLE IF NOT EXISTS user_transfers (
+  id SERIAL PRIMARY KEY,
+  from_account_id INTEGER NOT NULL REFERENCES kueski_accounts(id) ON DELETE CASCADE,
+  to_account_id INTEGER NOT NULL REFERENCES kueski_accounts(id) ON DELETE CASCADE,
+  amount NUMERIC(12,2) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 INSERT INTO merchants (domain, name, active)
 VALUES
   ('amazon.com.mx', 'Amazon México', TRUE),
