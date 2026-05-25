@@ -52,6 +52,13 @@ function switchTab(tabName) {
 }
 
 
+function getCreditUsagePercent(usedBalance, creditLimit) {
+  const limit = parseFloat(creditLimit);
+  const used = parseFloat(usedBalance);
+  if (!limit || limit <= 0) return 0;
+  return Math.min(100, Math.round((used / limit) * 100));
+}
+
 // Load real account data from the API
 async function loadAccountData() {
   const email = currentUserEmail;
@@ -67,65 +74,202 @@ async function loadAccountData() {
     // Update balance (Home tab)
     const homeBalance = document.querySelector('#tab-home .balance-amount');
     if (homeBalance) {
-      homeBalance.textContent =
-        '$' +
-        parseFloat(c.available_balance).toLocaleString('es-MX', {
-          minimumFractionDigits: 2,
-        });
+      homeBalance.textContent = formatMoneyValue(c.available_balance);
     }
 
-    // Update credit card bar
-    const usedPct = parseFloat(c.credit_limit) > 0
-  ? Math.round((parseFloat(c.used_balance) / parseFloat(c.credit_limit)) * 100)
-  : 0;
-    document.querySelector(".credit-pct").textContent = usedPct + "%";
-    document.querySelector(".progress-fill").style.width = usedPct + "%";
-    document.querySelector(".credit-range span:first-child").textContent =
-      "$" + parseFloat(c.used_balance).toLocaleString("es-MX") + " Usado";
-    document.querySelector(".credit-range span:last-child").textContent =
-      "$" + parseFloat(c.credit_limit).toLocaleString("es-MX") + " Límite";
+    // Update credit usage card (Home tab)
+    const homeCreditCard = document.querySelector('#tab-home .credit-card');
+    if (homeCreditCard) {
+      const usedPct = getCreditUsagePercent(c.used_balance, c.credit_limit);
+      homeCreditCard.querySelector('.credit-pct').textContent = usedPct + '%';
+      homeCreditCard.querySelector('.progress-fill').style.width = usedPct + '%';
+      homeCreditCard.querySelector('.credit-range span:first-child').textContent =
+        formatMoneyValue(c.used_balance) + ' Usado';
+      homeCreditCard.querySelector('.credit-range span:last-child').textContent =
+        formatMoneyValue(c.credit_limit) + ' Límite';
+    }
 
-    // Update account tab
-    document.querySelector(
-      ".balance-amount + .progress-bar + div strong, .credit-limit-val"
-    ).textContent =
-      "$" +
-      parseFloat(c.credit_limit).toLocaleString("es-MX", {
-        minimumFractionDigits: 2,
-      });
+    // Update account tab limit label (full load happens in loadAccountTab)
+    const creditLimitVal = document.querySelector('.credit-limit-val');
+    if (creditLimitVal) {
+      creditLimitVal.textContent = formatMoneyValue(c.credit_limit);
+    }
   } catch (err) {
     console.error("Error loading account data:", err);
   }
 
   loadCurrentSiteCoupon();
+  updateRemindersIndicator();
+}
 
+async function updateRemindersIndicator() {
+  const dot = document.getElementById('reminders-indicator');
+  if (!dot) return;
+
+  if (!currentUserEmail) {
+    dot.classList.add('hidden');
+    return;
+  }
+
+  try {
+    const res = await fetch(
+      `http://localhost:3000/api/recordatorios?email=${encodeURIComponent(currentUserEmail)}`
+    );
+    const data = await res.json();
+    const hasPending = data.ok && Array.isArray(data.recordatorios) && data.recordatorios.length > 0;
+    dot.classList.toggle('hidden', !hasPending);
+  } catch (err) {
+    dot.classList.add('hidden');
+  }
 }
 
 // Fetch account + transactions from the backend for this user
+function getPurchasePaymentStatusLabel(tx) {
+  if (tx.status === 'completed') return 'PAGO COMPLETADO';
+  return 'PAGO PENDIENTE';
+}
+
 function getActivityStatusLabel(tx) {
   if (tx.status === 'transfer_sent') return 'ENVIADA';
   if (tx.status === 'transfer_received') return 'RECIBIDA';
-  if (tx.status === 'loaned') return 'PRÉSTAMO';
-  if (tx.status === 'authorized') return tx.num_installments + ' QUINCENAS';
+  if (getActivityKind(tx) === 'loan') return 'ACREDITADO';
+  if (getActivityKind(tx) === 'purchase') return getPurchasePaymentStatusLabel(tx);
   if (tx.status === 'completed') return 'PAGADO';
   return String(tx.status || '').toUpperCase();
 }
 
 function getActivityStatusClass(tx) {
   if (tx.status === 'transfer_received') return 'paid';
-  if (tx.status === 'transfer_sent') return 'pending';
+  if (getActivityKind(tx) === 'loan') return 'paid';
+  if (getActivityKind(tx) === 'purchase' && tx.status === 'completed') return 'paid';
+  if (tx.status === 'transfer_sent') return 'paid';
   if (tx.status === 'completed') return 'paid';
   return 'pending';
 }
 
 function getActivityIcon(tx) {
   if (tx.status === 'transfer_sent' || tx.status === 'transfer_received') return '💸';
+  if (getActivityKind(tx) === 'loan') return '💰';
   return '🛒';
 }
 
 function getActivityTypeLabel(tx) {
   if (tx.status === 'transfer_sent' || tx.status === 'transfer_received') return 'Transferencia';
+  if (getActivityKind(tx) === 'loan') return 'Acreditación';
   return 'Crédito';
+}
+
+function formatMoneyValue(amount) {
+  return '$' + parseFloat(amount || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 });
+}
+
+function escapeHtmlAttr(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;');
+}
+
+function getTransactionDetailStatus(tx) {
+  if (tx.status === 'transfer_received') return 'RECIBIDA';
+  if (tx.status === 'transfer_sent') return 'ENVIADA';
+  if (getActivityKind(tx) === 'loan') return 'ACREDITADO';
+  if (getActivityKind(tx) === 'purchase') return getPurchasePaymentStatusLabel(tx);
+  if (tx.status === 'completed') return 'PAGADO';
+  return getActivityStatusLabel(tx);
+}
+
+function getTransactionCouponLabel(tx) {
+  return tx.coupon_label || 'Ninguno';
+}
+
+function getTransactionInstallmentsLabel(tx) {
+  if (getActivityKind(tx) !== 'purchase') return '';
+  return `${tx.num_installments || 0} quincenas`;
+}
+
+function isLoanTransaction(tx) {
+  return tx.is_loan === true
+    || tx.is_loan === 't'
+    || tx.status === 'loaned'
+    || tx.merchant === 'Kueski Cash'
+    || tx.merchant === 'Préstamo demo';
+}
+
+function getActivityKind(tx) {
+  if (tx.status === 'transfer_sent' || tx.status === 'transfer_received') return 'transfer';
+  if (isLoanTransaction(tx)) return 'loan';
+  return 'purchase';
+}
+
+function formatPersonLabel(name, email) {
+  if (name && email) return `${name}\n${email}`;
+  return name || email || '—';
+}
+
+function getActivityHeroTitle(tx, kind) {
+  if (kind === 'transfer') {
+    return tx.status === 'transfer_sent' ? 'Transferencia enviada' : 'Transferencia recibida';
+  }
+  if (kind === 'loan') return 'Kueski Cash';
+  return tx.merchant || 'Kueski Pay';
+}
+
+function getActivityKindLabel(kind) {
+  if (kind === 'transfer') return 'Transferencia';
+  if (kind === 'loan') return 'Kueski Cash';
+  return 'Compra';
+}
+
+function setTransactionDetailBadge(status) {
+  const badge = document.getElementById('txd-status-badge');
+  badge.textContent = status || 'PENDIENTE';
+  const isPaid = ['PAGADO', 'RECIBIDA', 'ENVIADA', 'ACREDITADO', 'PAGO COMPLETADO'].includes(status);
+  badge.className = 'tx-detail-badge ' + (isPaid ? 'paid' : 'pending');
+}
+
+function showTransactionDetail(row) {
+  const d = row.dataset;
+  const kind = d.type || 'purchase';
+
+  document.getElementById('txd-kind').textContent = getActivityKindLabel(kind);
+  document.getElementById('txd-store').textContent = d.store || 'Kueski Pay';
+  document.getElementById('txd-date').textContent = d.date || '';
+  setTransactionDetailBadge(d.status);
+
+  document.getElementById('txd-purchase-details').classList.add('hidden');
+  document.getElementById('txd-transfer-details').classList.add('hidden');
+  document.getElementById('txd-loan-details').classList.add('hidden');
+
+  if (kind === 'purchase') {
+    document.getElementById('txd-original').textContent = d.original || d.amount || '$0.00';
+    document.getElementById('txd-coupon').textContent = d.coupon || 'Ninguno';
+    document.getElementById('txd-savings').textContent = d.savings || '$0.00';
+    document.getElementById('txd-amount').textContent = d.amount || '$0.00';
+    document.getElementById('txd-installments').textContent = d.installments || '—';
+    document.getElementById('txd-installment-amount').textContent = d.installmentAmount || '$0.00';
+    document.getElementById('txd-method').textContent = d.method || 'Kueski Pay - Crédito';
+    document.getElementById('txd-purchase-details').classList.remove('hidden');
+  } else if (kind === 'transfer') {
+    const isSent = d.status === 'ENVIADA';
+    document.getElementById('txd-transfer-type').textContent = isSent ? 'Enviada' : 'Recibida';
+    document.getElementById('txd-transfer-from').textContent =
+      formatPersonLabel(d.fromName, d.fromEmail);
+    document.getElementById('txd-transfer-to').textContent =
+      formatPersonLabel(d.toName, d.toEmail);
+    document.getElementById('txd-transfer-amount').textContent = d.amount || '$0.00';
+    document.getElementById('txd-transfer-details').classList.remove('hidden');
+  } else if (kind === 'loan') {
+    document.getElementById('txd-loan-amount').textContent = d.amount || '$0.00';
+    document.getElementById('txd-loan-status').textContent = 'Acreditado';
+    document.getElementById('txd-loan-details').classList.remove('hidden');
+  }
+
+  document.getElementById('transaction-overlay').classList.remove('hidden');
+}
+
+function closeTransactionDetail() {
+  document.getElementById('transaction-overlay').classList.add('hidden');
 }
 
 async function loadActivityData() {
@@ -143,9 +287,13 @@ async function loadActivityData() {
     // Calculate real totals from DB activity (exclude incoming transfers from "gastado")
     const totalSpent = txs.reduce((sum, tx) => {
       if (tx.status === 'transfer_received') return sum;
+      if (getActivityKind(tx) === 'loan') return sum;
       return sum + parseFloat(tx.total_amount);
     }, 0);
-    const totalSaved = txs.reduce((sum, tx) => sum + parseFloat(tx.discount_amount || 0), 0);
+    const totalSaved = txs.reduce((sum, tx) => {
+      if (getActivityKind(tx) !== 'purchase') return sum;
+      return sum + parseFloat(tx.discount_amount || 0);
+    }, 0);
 
     // Update stat cards with real data
     document.querySelector('.stat-card.stat-primary .stat-value').textContent =
@@ -162,27 +310,47 @@ async function loadActivityData() {
 
     // Build a row for each transaction returned by the API
     list.innerHTML = txs
-      .map(
-        (tx) => `
-      <div class="transaction-row">
+      .map((tx) => {
+        const kind = getActivityKind(tx);
+        const statusLabel = getTransactionDetailStatus(tx);
+        const formattedDate = new Date(tx.created_at).toLocaleDateString('es-MX', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric'
+        });
+        const heroTitle = getActivityHeroTitle(tx, kind);
+
+        return `
+      <div class="transaction-row" data-action="transaction-detail"
+        data-type="${escapeHtmlAttr(kind)}"
+        data-store="${escapeHtmlAttr(heroTitle)}"
+        data-date="${escapeHtmlAttr(formattedDate)}"
+        data-original="${escapeHtmlAttr(formatMoneyValue(tx.original_amount))}"
+        data-amount="${escapeHtmlAttr(formatMoneyValue(tx.total_amount))}"
+        data-status="${escapeHtmlAttr(statusLabel)}"
+        data-method="Kueski Pay - Crédito"
+        data-installments="${escapeHtmlAttr(getTransactionInstallmentsLabel(tx))}"
+        data-installment-amount="${escapeHtmlAttr(formatMoneyValue(tx.amount_per_installment))}"
+        data-coupon="${escapeHtmlAttr(getTransactionCouponLabel(tx))}"
+        data-savings="${escapeHtmlAttr(formatMoneyValue(tx.discount_amount))}"
+        data-from-name="${escapeHtmlAttr(tx.transfer_from_name || '')}"
+        data-from-email="${escapeHtmlAttr(tx.transfer_from_email || '')}"
+        data-to-name="${escapeHtmlAttr(tx.transfer_to_name || '')}"
+        data-to-email="${escapeHtmlAttr(tx.transfer_to_email || '')}">
         <div class="tx-icon">${getActivityIcon(tx)}</div>
         <div class="tx-info">
           <strong>${tx.merchant || "Kueski Pay"}</strong>
-          <span>${new Date(tx.created_at).toLocaleDateString(
-            "es-MX"
-          )} • ${getActivityTypeLabel(tx)}</span>
+          <span>${formattedDate} • ${getActivityTypeLabel(tx)}</span>
         </div>
         <div class="tx-amount">
-          <strong>$${parseFloat(tx.total_amount).toLocaleString("es-MX", {
-            minimumFractionDigits: 2,
-          })}</strong>
+          <strong>${formatMoneyValue(tx.total_amount)}</strong>
           <span class="tx-status ${getActivityStatusClass(tx)}">
             ${getActivityStatusLabel(tx)}
           </span>
         </div>
       </div>
-    `
-      )
+    `;
+      })
       .join("");
   } catch (err) {
     console.error("Error loading activity:", err);
@@ -215,9 +383,7 @@ async function loadAccountTab() {
       '$' + parseFloat(c.credit_limit).toLocaleString('es-MX', { minimumFractionDigits: 2 });
 
     // Update progress bar
-    const usedPct = c.credit_limit > 0
-      ? Math.round((parseFloat(c.used_balance) / parseFloat(c.credit_limit)) * 100)
-      : 0;
+    const usedPct = getCreditUsagePercent(c.used_balance, c.credit_limit);
     document.querySelector('#tab-account .progress-fill').style.width = usedPct + '%';
 
   } catch (err) {
@@ -380,17 +546,22 @@ async function loadReminders() {
       const badge = getReminderBadge(item.due_date, isPaid);
       const badgeClass =
         badge.status === 'paid' ? 'badge-paid' : badge.status === 'danger' ? 'badge-danger' : 'badge-warning';
-      const dateText = isPaid ? 'Pagado' : `Vence ${formatReminderDate(item.due_date)}`;
+      const dateText = isPaid
+        ? 'Pagado'
+        : `Quincena ${item.installment_no} de ${item.num_installments} · Vence ${formatReminderDate(item.due_date)}`;
       const amount = parseFloat(item.amount);
 
       return `
         <div class="reminder-row">
           <div class="reminder-info">
-            <strong>${item.merchant}</strong>
+            <strong>${escapeHtmlAttr(item.merchant)}</strong>
             <span class="reminder-amount">$${amount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
             <span class="reminder-date">${dateText}</span>
           </div>
-          <span class="reminder-badge ${badgeClass}">${badge.label}</span>
+          <div class="reminder-actions">
+            <span class="reminder-badge ${badgeClass}">${badge.label}</span>
+            ${isPaid ? '' : `<button class="btn-reminder-pay" type="button" data-action="pay-installment" data-installment-id="${item.id}">Pagar</button>`}
+          </div>
         </div>
       `;
     }).join('');
@@ -407,6 +578,74 @@ function openReminders() {
 
 function closeReminders() {
   document.getElementById('reminders-overlay').classList.add('hidden');
+}
+
+function openDeleteAccount() {
+  document.getElementById('delete-account-overlay').classList.remove('hidden');
+}
+
+function closeDeleteAccount() {
+  document.getElementById('delete-account-overlay').classList.add('hidden');
+}
+
+async function confirmDeleteAccount() {
+  if (!currentUserEmail) return;
+
+  try {
+    const res = await fetch('http://localhost:3000/api/cuenta', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: currentUserEmail }),
+    });
+    const data = await res.json();
+
+    if (!data.ok) {
+      alert(data.error || 'No se pudo eliminar la cuenta');
+      return;
+    }
+
+    closeDeleteAccount();
+    currentUserEmail = null;
+    chrome.storage.local.remove('userEmail');
+    updateRemindersIndicator();
+    navigate('login');
+  } catch (err) {
+    console.error('Error deleting account:', err);
+    alert('Error de conexión al eliminar la cuenta');
+  }
+}
+
+async function payInstallment(installmentId) {
+  if (!currentUserEmail || !installmentId) return;
+
+  try {
+    const res = await fetch('http://localhost:3000/api/recordatorios/pagar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: currentUserEmail,
+        installment_id: parseInt(installmentId, 10),
+      }),
+    });
+    const data = await res.json();
+
+    if (!data.ok) {
+      alert(data.error || 'No se pudo procesar el pago');
+      return;
+    }
+
+    await loadReminders();
+    await loadAccountData();
+    await loadActivityData();
+    updateRemindersIndicator();
+
+    if (data.pago?.transaction_completed) {
+      alert(`Cuota pagada. ¡Compra en ${data.pago.merchant} liquidada por completo!`);
+    }
+  } catch (err) {
+    console.error('Error paying installment:', err);
+    alert('Error de conexión al pagar la cuota');
+  }
 }
 
 // ===== USER TRANSFERS =====
@@ -673,6 +912,9 @@ document.addEventListener("DOMContentLoaded", () => {
       case "close-reminders":
         closeReminders();
         break;
+      case "pay-installment":
+        payInstallment(actionEl.dataset.installmentId);
+        break;
       case "open-transfer":
         openTransfer();
         break;
@@ -691,12 +933,28 @@ document.addEventListener("DOMContentLoaded", () => {
       case "copy-code":
         copyCode();
         break;
+      case "transaction-detail":
+        showTransactionDetail(actionEl);
+        break;
+      case "close-transaction-detail":
+        closeTransactionDetail();
+        break;
 
       // Clear session and return to login
       case 'logout':
         currentUserEmail = null;
         chrome.storage.local.remove('userEmail');
+        updateRemindersIndicator();
         navigate('login');
+        break;
+      case 'open-delete-account':
+        openDeleteAccount();
+        break;
+      case 'close-delete-account':
+        closeDeleteAccount();
+        break;
+      case 'confirm-delete-account':
+        confirmDeleteAccount();
         break;
 
       // Hide checkout overlay and refresh balance
@@ -973,4 +1231,10 @@ document.addEventListener("click", (e) => {
 
   const transferOverlay = document.getElementById("transfer-overlay");
   if (e.target === transferOverlay) closeTransfer();
+
+  const transactionOverlay = document.getElementById("transaction-overlay");
+  if (e.target === transactionOverlay) closeTransactionDetail();
+
+  const deleteAccountOverlay = document.getElementById("delete-account-overlay");
+  if (e.target === deleteAccountOverlay) closeDeleteAccount();
 });

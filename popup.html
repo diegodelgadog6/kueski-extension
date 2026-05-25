@@ -20,12 +20,6 @@
           <p class="login-subtitle">ACCEDE A TU ASISTENTE FINANCIERO</p>
         </div>
         <div class="login-card">
-          <div class="social-buttons">
-            <button class="social-btn"><span class="material-symbols-outlined">mail</span></button>
-            <button class="social-btn"><span class="material-symbols-outlined">smartphone</span></button>
-            <button class="social-btn"><span class="material-symbols-outlined">fingerprint</span></button>
-          </div>
-          <div class="divider"><span>O</span></div>
           <div class="form-group">
             <label>CORREO ELECTRÓNICO</label>
             <input type="email" placeholder="usuario@email.com" id="login-email">
@@ -121,8 +115,10 @@
           <span class="brand-name">Kueski</span>
         </div>
         <div class="header-actions">
-          <button class="icon-btn" data-action="open-reminders"><span class="material-symbols-outlined">notifications</span></button>
-          <button class="icon-btn" data-action="switch-tab" data-tab="account"><span class="material-symbols-outlined">settings</span></button>
+          <button class="icon-btn icon-btn-notifications" data-action="open-reminders">
+            <span class="material-symbols-outlined">notifications</span>
+            <span id="reminders-indicator" class="reminders-indicator hidden" aria-hidden="true"></span>
+          </button>
         </div>
       </header>
 
@@ -142,7 +138,6 @@
           <!-- Financial Overview -->
           <div class="section-header">
             <span class="section-label">RESUMEN FINANCIERO</span>
-            <span class="section-link">Detalles <span class="material-symbols-outlined tiny">trending_up</span></span>
           </div>
 
           <div class="balance-card">
@@ -474,6 +469,10 @@
               <span class="material-symbols-outlined menu-arrow">chevron_right</span>
             </div>
           </div>
+
+          <button class="btn-delete-account" type="button" data-action="open-delete-account">
+            Eliminar cuenta
+          </button>
         </div>
       </main>
 
@@ -558,6 +557,134 @@
         <button class="btn-primary" data-action="close-coupon-detail">Comprar en línea <span class="material-symbols-outlined tiny">arrow_forward</span></button>
       </div>
     </div>
+    <!-- ==================== TRANSACTION DETAIL OVERLAY ==================== -->
+    <div id="transaction-overlay" class="overlay hidden">
+      <div class="overlay-card">
+        <div class="overlay-header">
+          <div class="header-brand">
+            <img src="assets/kueski-logo.webp" style="width:24px;height:24px;object-fit:contain" alt="Kueski">
+            <span class="brand-name">Kueski</span>
+          </div>
+          <button class="icon-btn" data-action="close-transaction-detail">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div class="tx-detail-hero">
+          <p class="tx-detail-kind" id="txd-kind">Compra</p>
+          <h2 class="tx-detail-store" id="txd-store">Amazon México</h2>
+          <p class="tx-detail-date" id="txd-date">24 abr 2026</p>
+          <span class="tx-detail-badge pending" id="txd-status-badge">PENDIENTE</span>
+        </div>
+
+        <div id="txd-purchase-details" class="tx-detail-panel hidden">
+          <div class="tx-detail-section">
+            <h3 class="tx-detail-section-title">Desglose de pago</h3>
+            <div class="tx-detail-row">
+              <span>Monto original</span>
+              <strong id="txd-original">$0.00</strong>
+            </div>
+            <div class="tx-detail-row">
+              <span>Cupón aplicado</span>
+              <strong id="txd-coupon">Ninguno</strong>
+            </div>
+            <div class="tx-detail-row">
+              <span>Ahorro</span>
+              <strong id="txd-savings">$0.00</strong>
+            </div>
+            <div class="tx-detail-row tx-detail-row-total">
+              <span>Monto final</span>
+              <strong id="txd-amount">$0.00</strong>
+            </div>
+          </div>
+
+          <div class="tx-detail-section">
+            <h3 class="tx-detail-section-title">Plan de pagos</h3>
+            <div class="tx-detail-row">
+              <span>Quincenas</span>
+              <strong id="txd-installments">4 quincenas</strong>
+            </div>
+            <div class="tx-detail-row">
+              <span>Monto por quincena</span>
+              <strong id="txd-installment-amount">$0.00</strong>
+            </div>
+            <div class="tx-detail-row">
+              <span>Método de pago</span>
+              <strong id="txd-method">Kueski Pay - Crédito</strong>
+            </div>
+          </div>
+        </div>
+
+        <div id="txd-transfer-details" class="tx-detail-panel hidden">
+          <div class="tx-detail-section">
+            <h3 class="tx-detail-section-title">Detalle de transferencia</h3>
+            <div class="tx-detail-row">
+              <span>Tipo</span>
+              <strong id="txd-transfer-type">Enviada</strong>
+            </div>
+            <div class="tx-detail-row">
+              <span>Remitente</span>
+              <strong id="txd-transfer-from" class="tx-detail-person">—</strong>
+            </div>
+            <div class="tx-detail-row">
+              <span>Destinatario</span>
+              <strong id="txd-transfer-to" class="tx-detail-person">—</strong>
+            </div>
+            <div class="tx-detail-row">
+              <span>Monto transferido</span>
+              <strong id="txd-transfer-amount">$0.00</strong>
+            </div>
+            <div class="tx-detail-row">
+              <span>Método</span>
+              <strong>Transferencia Kueski Pay</strong>
+            </div>
+          </div>
+        </div>
+
+        <div id="txd-loan-details" class="tx-detail-panel hidden">
+          <div class="tx-detail-section">
+            <h3 class="tx-detail-section-title">Detalle del préstamo</h3>
+            <div class="tx-detail-row">
+              <span>Monto acreditado</span>
+              <strong id="txd-loan-amount">$0.00</strong>
+            </div>
+            <div class="tx-detail-row">
+              <span>Origen</span>
+              <strong>Kueski Cash</strong>
+            </div>
+            <div class="tx-detail-row">
+              <span>Destino</span>
+              <strong>Saldo disponible</strong>
+            </div>
+            <div class="tx-detail-row">
+              <span>Estado</span>
+              <strong id="txd-loan-status">Acreditado</strong>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ==================== DELETE ACCOUNT OVERLAY ==================== -->
+    <div id="delete-account-overlay" class="overlay hidden">
+      <div class="overlay-card">
+        <div class="overlay-header">
+          <h2 class="delete-account-title">Eliminar cuenta</h2>
+          <button class="icon-btn" data-action="close-delete-account">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <p class="delete-account-text">
+          ¿Seguro que quieres eliminar tu cuenta? Se borrarán tus datos, transacciones y saldo. Esta acción no se puede deshacer.
+        </p>
+        <div class="delete-account-actions">
+          <button class="btn-secondary" type="button" data-action="close-delete-account">Cancelar</button>
+          <button class="btn-delete-account" type="button" data-action="confirm-delete-account">Eliminar cuenta</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ==================== PAYMENT REMINDERS OVERLAY ==================== -->
     <div id="reminders-overlay" class="overlay hidden">
       <div class="overlay-card">

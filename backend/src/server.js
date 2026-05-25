@@ -3,6 +3,8 @@ const cors = require('cors');
 require('dotenv').config();
 const db = require('./db');
 
+const DEMO_CREDIT_LIMIT = 45000;
+
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 
@@ -149,7 +151,7 @@ app.post('/api/prestamo-demo', async (req, res) => {
     const transactionResult = await client.query(`
       INSERT INTO transactions
         (account_id, plan_id, merchant_id, original_amount, discount_amount, total_amount, amount_per_installment, status)
-      VALUES ($1, $2, NULL, $3, 0, $3, $3, 'authorized')
+      VALUES ($1, $2, NULL, $3, 0, $3, $3, 'loaned')
       RETURNING id, created_at
     `, [account.id, planId, parsedAmount.toFixed(2)]);
 
@@ -225,26 +227,132 @@ app.get('/api/recordatorios', async (req, res) => {
         i.status,
         i.paid_at,
         i.installment_no,
+        t.id AS transaction_id,
+        pp.num_installments,
         COALESCE(m.name, 'Kueski Pay') AS merchant
       FROM installments i
       JOIN transactions t ON t.id = i.transaction_id
+      JOIN payment_plans pp ON pp.id = t.plan_id
       JOIN kueski_accounts ka ON ka.id = t.account_id
       JOIN users u ON u.id = ka.user_id
       LEFT JOIN merchants m ON m.id = t.merchant_id
       WHERE u.email = $1
-        AND (
-          i.status = 'pending'
-          OR (i.paid_at IS NOT NULL AND i.paid_at >= CURRENT_DATE - INTERVAL '30 days')
-        )
-      ORDER BY
-        CASE WHEN i.paid_at IS NOT NULL THEN 1 ELSE 0 END,
-        i.due_date ASC
+        AND i.status = 'pending'
+      ORDER BY i.due_date ASC
       LIMIT 50
     `, [email]);
 
     res.json({ ok: true, recordatorios: result.rows });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/recordatorios/pagar', async (req, res) => {
+  const { email, installment_id } = req.body || {};
+  if (!email || !installment_id) {
+    return res.status(400).json({ ok: false, error: 'email e installment_id son requeridos' });
+  }
+
+  let client;
+  try {
+    client = await db.pool.connect();
+    await client.query('BEGIN');
+
+    const installmentRes = await client.query(`
+      SELECT
+        i.id,
+        i.amount,
+        i.status,
+        i.transaction_id,
+        i.installment_no,
+        t.status AS transaction_status,
+        ka.id AS account_id,
+        ka.available_balance,
+        ka.used_balance,
+        COALESCE(m.name, 'Kueski Pay') AS merchant
+      FROM installments i
+      JOIN transactions t ON t.id = i.transaction_id
+      JOIN kueski_accounts ka ON ka.id = t.account_id
+      JOIN users u ON u.id = ka.user_id
+      LEFT JOIN merchants m ON m.id = t.merchant_id
+      WHERE u.email = $1 AND i.id = $2
+      FOR UPDATE OF i, ka
+    `, [email, installment_id]);
+
+    if (installmentRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ ok: false, error: 'Cuota no encontrada' });
+    }
+
+    const installment = installmentRes.rows[0];
+    if (installment.status === 'paid') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ ok: false, error: 'Esta cuota ya fue pagada' });
+    }
+
+    const amount = parseFloat(installment.amount);
+    const availableBalance = parseFloat(installment.available_balance);
+    if (availableBalance < amount) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        ok: false,
+        error: `Saldo insuficiente. Necesitas ${amount.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })} para pagar esta cuota.`,
+      });
+    }
+
+    await client.query(`
+      UPDATE installments
+      SET status = 'paid', paid_at = NOW()
+      WHERE id = $1
+    `, [installment.id]);
+
+    await client.query(`
+      UPDATE kueski_accounts
+      SET available_balance = available_balance - $1,
+          used_balance = GREATEST(used_balance - $1, 0),
+          updated_at = NOW()
+      WHERE id = $2
+    `, [amount.toFixed(2), installment.account_id]);
+
+    const pendingRes = await client.query(`
+      SELECT COUNT(*)::int AS pending_count
+      FROM installments
+      WHERE transaction_id = $1 AND status = 'pending'
+    `, [installment.transaction_id]);
+
+    const allPaid = pendingRes.rows[0].pending_count === 0;
+    if (allPaid) {
+      await client.query(`
+        UPDATE transactions
+        SET status = 'completed'
+        WHERE id = $1
+      `, [installment.transaction_id]);
+    }
+
+    const accountRes = await client.query(`
+      SELECT available_balance, used_balance, credit_limit
+      FROM kueski_accounts
+      WHERE id = $1
+    `, [installment.account_id]);
+
+    await client.query('COMMIT');
+
+    return res.json({
+      ok: true,
+      pago: {
+        installment_id: installment.id,
+        amount: amount.toFixed(2),
+        merchant: installment.merchant,
+        transaction_completed: allPaid,
+      },
+      cuenta: accountRes.rows[0],
+    });
+  } catch (err) {
+    if (client) await client.query('ROLLBACK');
+    return res.status(500).json({ ok: false, error: err.message });
+  } finally {
+    if (client) client.release();
   }
 });
 
@@ -384,12 +492,41 @@ app.get('/api/cuenta', async (req, res) => {
       SELECT * FROM (
         SELECT t.id, t.total_amount, t.original_amount, t.discount_amount,
                t.amount_per_installment, pp.num_installments, t.status, t.created_at,
-               COALESCE(m.name, CASE WHEN t.status = 'loaned' THEN 'Préstamo demo' ELSE 'Kueski Pay' END) AS merchant
+               CASE
+                 WHEN t.status = 'loaned'
+                   OR (
+                     t.merchant_id IS NULL
+                     AND t.coupon_id IS NULL
+                     AND NOT EXISTS (
+                       SELECT 1 FROM installments i WHERE i.transaction_id = t.id
+                     )
+                   )
+                 THEN 'Kueski Cash'
+                 ELSE COALESCE(m.name, 'Kueski Pay')
+               END AS merchant,
+               CASE WHEN c.code IS NOT NULL THEN c.code || ' - ' || c.discount ELSE NULL END AS coupon_label,
+               NULL::text AS transfer_from_name,
+               NULL::text AS transfer_from_email,
+               NULL::text AS transfer_to_name,
+               NULL::text AS transfer_to_email,
+               CASE
+                 WHEN t.status = 'loaned'
+                   OR (
+                     t.merchant_id IS NULL
+                     AND t.coupon_id IS NULL
+                     AND NOT EXISTS (
+                       SELECT 1 FROM installments i WHERE i.transaction_id = t.id
+                     )
+                   )
+                 THEN TRUE
+                 ELSE FALSE
+               END AS is_loan
         FROM transactions t
         JOIN kueski_accounts ka ON ka.id = t.account_id
         JOIN users u            ON u.id  = ka.user_id
         JOIN payment_plans pp   ON pp.id = t.plan_id
         LEFT JOIN merchants m   ON m.id  = t.merchant_id
+        LEFT JOIN coupons c     ON c.id  = t.coupon_id
         WHERE u.email = $1
 
         UNION ALL
@@ -401,7 +538,13 @@ app.get('/api/cuenta', async (req, res) => {
                CASE
                  WHEN ut.from_account_id = ka.id THEN 'Transferencia a ' || u_to.name
                  ELSE 'Transferencia de ' || u_from.name
-               END
+               END,
+               NULL AS coupon_label,
+               u_from.name AS transfer_from_name,
+               u_from.email AS transfer_from_email,
+               u_to.name AS transfer_to_name,
+               u_to.email AS transfer_to_email,
+               FALSE AS is_loan
         FROM user_transfers ut
         JOIN kueski_accounts ka ON ka.id = ut.from_account_id OR ka.id = ut.to_account_id
         JOIN users u ON u.id = ka.user_id
@@ -473,6 +616,19 @@ app.post('/api/transacciones', async (req, res) => {
     const base = parseFloat(monto) - discount;
     const total = base * (1 + parseFloat(plan.interest_rate));
     const per_inst = total / plan.num_installments;
+
+    const creditLimit = parseFloat(cuenta.credit_limit);
+    const usedBalance = parseFloat(cuenta.used_balance);
+    const creditRemaining = creditLimit - usedBalance;
+    if (total > creditRemaining) {
+      await client.query('ROLLBACK');
+      const remaining = Math.max(0, creditRemaining);
+      return res.status(400).json({
+        ok: false,
+        error: `Superas tu límite de crédito. Te quedan $${remaining.toLocaleString('es-MX', { minimumFractionDigits: 2 })} disponibles para compras a plazos.`,
+      });
+    }
+
     const merchantRes = await client.query(
       'SELECT id FROM merchants WHERE domain = $1', [domain || '']
     );
@@ -549,10 +705,10 @@ app.post('/api/register', async (req, res) => {
     );
     const user = userRes.rows[0];
 
-    // Create their Kueski account with $0 until credit is approved
+    // Create their Kueski account with demo credit limit until real approval exists
     await client.query(
-      'INSERT INTO kueski_accounts (user_id, credit_limit, available_balance) VALUES ($1, 0, 0)',
-      [user.id]
+      'INSERT INTO kueski_accounts (user_id, credit_limit, available_balance) VALUES ($1, $2, 0)',
+      [user.id, DEMO_CREDIT_LIMIT]
     );
 
     await client.query('COMMIT');
@@ -571,6 +727,30 @@ app.post('/api/register', async (req, res) => {
 });
 
 
+// Delete user account and all related data (cascades in DB)
+app.delete('/api/cuenta', async (req, res) => {
+  const { email } = req.body || {};
+  if (!email) {
+    return res.status(400).json({ ok: false, error: 'email requerido' });
+  }
+
+  try {
+    const result = await db.query(
+      'DELETE FROM users WHERE LOWER(email) = LOWER($1) RETURNING id',
+      [email]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ ok: false, error: 'Usuario no encontrado' });
+    }
+
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+
 
 async function ensureTransferSchema() {
   await db.query(`
@@ -581,6 +761,25 @@ async function ensureTransferSchema() {
       amount NUMERIC(12,2) NOT NULL,
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
+  `);
+
+  // Prototype: assign fixed demo limit to accounts created before this feature
+  await db.query(`
+    UPDATE kueski_accounts
+    SET credit_limit = $1, updated_at = NOW()
+    WHERE credit_limit = 0
+  `, [DEMO_CREDIT_LIMIT]);
+
+  // Mark legacy Kueski Cash top-ups that were saved as purchases
+  await db.query(`
+    UPDATE transactions t
+    SET status = 'loaned'
+    WHERE t.status = 'authorized'
+      AND t.merchant_id IS NULL
+      AND t.coupon_id IS NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM installments i WHERE i.transaction_id = t.id
+      )
   `);
 }
 

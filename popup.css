@@ -110,6 +110,25 @@ body {
   background: var(--surface-container-high);
 }
 
+.icon-btn-notifications {
+  position: relative;
+}
+
+.reminders-indicator {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  background: var(--error);
+  border-radius: 50%;
+  border: 2px solid var(--surface);
+}
+
+.reminders-indicator.hidden {
+  display: none;
+}
+
 /* ===== LOGIN / REGISTER ===== */
 .login-container {
   display: flex;
@@ -773,6 +792,7 @@ body {
   padding: 14px;
   border-radius: 14px;
   transition: background 0.2s;
+  cursor: pointer;
 }
 .transaction-row:hover {
   background: var(--surface-container-low);
@@ -920,6 +940,47 @@ body {
 }
 .menu-item.logout span:nth-child(2) {
   color: var(--error);
+}
+
+.btn-delete-account {
+  width: 100%;
+  margin-top: 24px;
+  padding: 14px 16px;
+  border: none;
+  border-radius: 14px;
+  background: var(--error);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn-delete-account:hover {
+  opacity: 0.92;
+}
+
+.delete-account-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--primary);
+}
+
+.delete-account-text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--on-surface-variant);
+  margin-bottom: 20px;
+}
+
+.delete-account-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.delete-account-actions .btn-delete-account {
+  margin-top: 0;
 }
 
 /* ===== BOTTOM NAV ===== */
@@ -1137,6 +1198,29 @@ body {
   border-radius: 14px;
 }
 
+.reminder-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-reminder-pay {
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 50px;
+  cursor: pointer;
+}
+
+.btn-reminder-pay:hover {
+  opacity: 0.92;
+}
+
 .reminder-info {
   display: flex;
   flex-direction: column;
@@ -1254,6 +1338,109 @@ body {
   color: var(--green-dark);
   text-align: center;
   margin-bottom: 20px;
+}
+
+/* ===== TRANSACTION DETAIL OVERLAY ===== */
+.tx-detail-hero {
+  text-align: center;
+  background: var(--surface-container-low);
+  padding: 24px 20px;
+  border-radius: 18px;
+  margin-bottom: 16px;
+}
+
+.tx-detail-kind {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+  margin-bottom: 6px;
+}
+
+.tx-detail-panel.hidden {
+  display: none;
+}
+
+.tx-detail-store {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--primary);
+  margin-bottom: 6px;
+}
+
+.tx-detail-date {
+  font-size: 13px;
+  color: var(--on-surface-variant);
+  margin-bottom: 12px;
+}
+
+.tx-detail-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 4px 12px;
+  border-radius: 50px;
+}
+
+.tx-detail-badge.paid {
+  background: #e8f5e9;
+  color: var(--green-dark);
+}
+
+.tx-detail-badge.pending {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.tx-detail-section {
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--surface-container-high);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+
+.tx-detail-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--on-surface-variant);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.tx-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  font-size: 13px;
+  color: var(--on-surface-variant);
+}
+
+.tx-detail-row + .tx-detail-row {
+  border-top: 1px solid var(--surface-container-high);
+}
+
+.tx-detail-row strong {
+  color: var(--on-surface);
+  font-weight: 700;
+  text-align: right;
+}
+
+.tx-detail-row strong.tx-detail-person {
+  font-size: 12px;
+  line-height: 1.4;
+  max-width: 62%;
+  white-space: pre-line;
+}
+
+.tx-detail-row-total strong {
+  color: var(--primary);
+  font-size: 15px;
 }
 
 /* ===== ANIMATIONS ===== */
