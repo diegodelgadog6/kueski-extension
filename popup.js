@@ -99,7 +99,28 @@ async function loadAccountData() {
   }
 
   loadCurrentSiteCoupon();
+  updateRemindersIndicator();
+}
 
+async function updateRemindersIndicator() {
+  const dot = document.getElementById('reminders-indicator');
+  if (!dot) return;
+
+  if (!currentUserEmail) {
+    dot.classList.add('hidden');
+    return;
+  }
+
+  try {
+    const res = await fetch(
+      `http://localhost:3000/api/recordatorios?email=${encodeURIComponent(currentUserEmail)}`
+    );
+    const data = await res.json();
+    const hasPending = data.ok && Array.isArray(data.recordatorios) && data.recordatorios.length > 0;
+    dot.classList.toggle('hidden', !hasPending);
+  } catch (err) {
+    dot.classList.add('hidden');
+  }
 }
 
 // Fetch account + transactions from the backend for this user
@@ -586,6 +607,7 @@ async function confirmDeleteAccount() {
     closeDeleteAccount();
     currentUserEmail = null;
     chrome.storage.local.remove('userEmail');
+    updateRemindersIndicator();
     navigate('login');
   } catch (err) {
     console.error('Error deleting account:', err);
@@ -615,6 +637,7 @@ async function payInstallment(installmentId) {
     await loadReminders();
     await loadAccountData();
     await loadActivityData();
+    updateRemindersIndicator();
 
     if (data.pago?.transaction_completed) {
       alert(`Cuota pagada. ¡Compra en ${data.pago.merchant} liquidada por completo!`);
@@ -921,6 +944,7 @@ document.addEventListener("DOMContentLoaded", () => {
       case 'logout':
         currentUserEmail = null;
         chrome.storage.local.remove('userEmail');
+        updateRemindersIndicator();
         navigate('login');
         break;
       case 'open-delete-account':

@@ -110,6 +110,25 @@ body {
   background: var(--surface-container-high);
 }
 
+.icon-btn-notifications {
+  position: relative;
+}
+
+.reminders-indicator {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  background: var(--error);
+  border-radius: 50%;
+  border: 2px solid var(--surface);
+}
+
+.reminders-indicator.hidden {
+  display: none;
+}
+
 /* ===== LOGIN / REGISTER ===== */
 .login-container {
   display: flex;
