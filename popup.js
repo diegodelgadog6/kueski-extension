@@ -250,7 +250,7 @@ function navigate(viewName) {
     .querySelectorAll(".view")
     .forEach((v) => v.classList.remove("active"));
 
-  if (["home", "stores", "card", "activity", "account"].includes(viewName)) {
+  if (["home", "activity", "card", "stores", "account"].includes(viewName)) {
     document.getElementById("view-app").classList.add("active");
     switchTab(viewName);
     loadAccountData(); // Load account data when navigating to app views
@@ -273,7 +273,7 @@ function switchTab(tabName) {
   if (tab) tab.classList.add("active");
 
   const navItems = document.querySelectorAll(".nav-item");
-  const tabOrder = ["home", "stores", "card", "activity", "account"];
+  const tabOrder = ["home", "activity", "card", "stores", "account"];
   const idx = tabOrder.indexOf(tabName);
   if (idx >= 0 && navItems[idx]) navItems[idx].classList.add("active");
 
@@ -474,7 +474,9 @@ function getPurchasePaymentStatusLabel(tx) {
 function getActivityStatusLabel(tx) {
   if (tx.status === 'transfer_sent') return 'ENVIADA';
   if (tx.status === 'transfer_received') return 'RECIBIDA';
-  if (getActivityKind(tx) === 'loan') return 'ACREDITADO';
+  if (getActivityKind(tx) === 'loan') {
+    return tx.next_installment_id ? 'PAGO PENDIENTE' : 'LIQUIDADO';
+  }
   if (getActivityKind(tx) === 'purchase') return getPurchasePaymentStatusLabel(tx);
   if (tx.status === 'completed') return 'PAGADO';
   return String(tx.status || '').toUpperCase();
@@ -482,7 +484,9 @@ function getActivityStatusLabel(tx) {
 
 function getActivityStatusClass(tx) {
   if (tx.status === 'transfer_received') return 'paid';
-  if (getActivityKind(tx) === 'loan') return 'paid';
+  if (getActivityKind(tx) === 'loan') {
+    return tx.next_installment_id ? 'pending' : 'paid';
+  }
   if (getActivityKind(tx) === 'purchase' && tx.status === 'completed') return 'paid';
   if (tx.status === 'transfer_sent') return 'paid';
   if (tx.status === 'completed') return 'paid';
@@ -515,7 +519,9 @@ function escapeHtmlAttr(value) {
 function getTransactionDetailStatus(tx) {
   if (tx.status === 'transfer_received') return 'RECIBIDA';
   if (tx.status === 'transfer_sent') return 'ENVIADA';
-  if (getActivityKind(tx) === 'loan') return 'ACREDITADO';
+  if (getActivityKind(tx) === 'loan') {
+    return tx.next_installment_id ? 'PAGO PENDIENTE' : 'LIQUIDADO';
+  }
   if (getActivityKind(tx) === 'purchase') return getPurchasePaymentStatusLabel(tx);
   if (tx.status === 'completed') return 'PAGADO';
   return getActivityStatusLabel(tx);
@@ -526,7 +532,8 @@ function getTransactionCouponLabel(tx) {
 }
 
 function getTransactionInstallmentsLabel(tx) {
-  if (getActivityKind(tx) !== 'purchase') return '';
+  const kind = getActivityKind(tx);
+  if (kind !== 'purchase' && kind !== 'loan') return '';
   return `${tx.num_installments || 0} quincenas`;
 }
 
@@ -711,9 +718,14 @@ async function showTransactionDetail(row) {
     document.getElementById('txd-transfer-amount').textContent = d.amount || '$0.00';
     document.getElementById('txd-transfer-details').classList.remove('hidden');
   } else if (kind === 'loan') {
-    document.getElementById('txd-loan-amount').textContent = d.amount || '$0.00';
-    document.getElementById('txd-loan-status').textContent = 'Acreditado';
+    document.getElementById('txd-loan-amount').textContent = d.original || d.amount || '$0.00';
+    document.getElementById('txd-loan-total').textContent = d.amount || '$0.00';
+    document.getElementById('txd-loan-installments').textContent = d.installments || '—';
+    document.getElementById('txd-loan-installment-amount').textContent = d.installmentAmount || '$0.00';
+    document.getElementById('txd-loan-status').textContent =
+      d.status === 'LIQUIDADO' ? 'Liquidado' : 'Acreditado';
     document.getElementById('txd-loan-details').classList.remove('hidden');
+    await loadInstallmentTimeline(currentTransactionId);
   }
 
   document.getElementById('transaction-overlay').classList.remove('hidden');
@@ -803,6 +815,7 @@ async function loadActivityData() {
           <span class="tx-status ${getActivityStatusClass(tx)}">
             ${getActivityStatusLabel(tx)}
           </span>
+          <button class="btn-tx-more" type="button">Ver más</button>
         </div>
       </div>
     `;
@@ -1116,7 +1129,7 @@ async function payInstallment(installmentId) {
 }
 
 // ===== USER TRANSFERS =====
-let visualTransferBalance = 4850;
+let visualTransferBalance = 0;
 let pendingTransfer = { recipient: '', amount: 0 };
 
 function parseBalanceAmount(text) {
@@ -1274,45 +1287,275 @@ function filterStores() {
   renderStoresList();
 }
 
-async function requestDemoLoan() {
-  if (!currentUserEmail) {
-    alert("Inicia sesión primero");
-    return;
+// ===== KUESKI CASH PERSONAL LOAN =====
+let kueskiCashState = {
+  plans: [],
+  selectedPlanId: null,
+  amount: 0,
+  disbursement: 'kueski_balance',
+  creditRemaining: 0,
+};
+
+const KUESKI_CASH_STEPS = [
+  'kueski-cash-step-blocked',
+  'kueski-cash-step-simulator',
+  'kueski-cash-step-disbursement',
+  'kueski-cash-step-success',
+];
+
+function showKueskiCashStep(stepId) {
+  KUESKI_CASH_STEPS.forEach((id) => {
+    document.getElementById(id)?.classList.toggle('hidden', id !== stepId);
+  });
+}
+
+function resetKueskiCashForm() {
+  kueskiCashState = {
+    plans: kueskiCashState.plans,
+    selectedPlanId: null,
+    amount: 0,
+    disbursement: 'kueski_balance',
+    creditRemaining: kueskiCashState.creditRemaining,
+  };
+
+  const amountInput = document.getElementById('kueski-cash-amount');
+  if (amountInput) amountInput.value = '';
+
+  document.getElementById('kueski-cash-simulation')?.classList.add('hidden');
+  document.getElementById('kueski-cash-external-card')?.classList.add('hidden');
+  document.getElementById('kueski-cash-kueski-summary')?.classList.remove('hidden');
+
+  document.getElementById('kueski-cash-ext-number').value = '';
+  document.getElementById('kueski-cash-ext-holder').value = '';
+  document.getElementById('kueski-cash-ext-expiry').value = '';
+  document.getElementById('kueski-cash-ext-cvv').value = '';
+
+  document.querySelectorAll('.kueski-cash-disbursement-option').forEach((el, idx) => {
+    el.classList.toggle('active', idx === 0);
+  });
+}
+
+function renderKueskiCashPlans() {
+  const container = document.getElementById('kueski-cash-plan-options');
+  if (!container) return;
+
+  container.innerHTML = kueskiCashState.plans.map((plan) => {
+    const ratePct = parseFloat((parseFloat(plan.interest_rate) * 100).toFixed(2));
+    const rateLabel = ratePct > 0 ? `${ratePct}% interés` : 'Sin interés';
+    return `
+      <button type="button" class="kueski-cash-plan-option"
+        data-plan-id="${plan.id}">
+        <strong>${plan.num_installments} quincenas</strong>
+        <span>${rateLabel}</span>
+      </button>`;
+  }).join('');
+
+  container.querySelectorAll('.kueski-cash-plan-option').forEach((el) => {
+    el.addEventListener('click', () => {
+      container.querySelectorAll('.kueski-cash-plan-option').forEach((opt) => {
+        opt.classList.remove('active');
+      });
+      el.classList.add('active');
+      kueskiCashState.selectedPlanId = parseInt(el.dataset.planId, 10);
+      updateKueskiCashSimulation();
+    });
+  });
+
+  const first = container.querySelector('.kueski-cash-plan-option');
+  if (first) {
+    first.classList.add('active');
+    kueskiCashState.selectedPlanId = parseInt(first.dataset.planId, 10);
   }
-  if (!ensureFeatureAccess('kueski_cash', 'Kueski Cash no está disponible con tu estatus de crédito actual.')) {
-    return;
+}
+
+function updateKueskiCashSimulation() {
+  const amount = parseFloat(document.getElementById('kueski-cash-amount')?.value);
+  const plan = kueskiCashState.plans.find((p) => p.id === kueskiCashState.selectedPlanId);
+  const simBox = document.getElementById('kueski-cash-simulation');
+
+  if (!simBox || !plan || !Number.isFinite(amount) || amount < 100) {
+    simBox?.classList.add('hidden');
+    return null;
   }
 
-  const rawAmount = prompt("¿Cuánto dinero quieres agregar al saldo?");
-  if (rawAmount === null) return;
+  const total = amount * (1 + parseFloat(plan.interest_rate));
+  const perInst = total / plan.num_installments;
+  const interest = total - amount;
 
-  const amount = Number(rawAmount);
-  if (!Number.isFinite(amount) || amount <= 0) {
-    alert("Ingresa una cantidad válida");
-    return;
-  }
+  document.getElementById('kueski-cash-sim-total').textContent = formatBalanceAmount(total);
+  document.getElementById('kueski-cash-sim-installment').textContent = formatBalanceAmount(perInst);
+  document.getElementById('kueski-cash-sim-interest').textContent = formatBalanceAmount(interest);
+  simBox.classList.remove('hidden');
+
+  return { amount, total, perInst, plan };
+}
+
+async function loadKueskiCashSimulator() {
+  const creditDisplay = document.getElementById('kueski-cash-credit-display');
+  creditDisplay.textContent = 'Crédito disponible: cargando...';
 
   try {
-    const res = await fetch('http://localhost:3000/api/prestamo-demo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: currentUserEmail, amount })
-    });
+    const [cuentaRes, planesRes] = await Promise.all([
+      fetch(`http://localhost:3000/api/cuenta?email=${encodeURIComponent(currentUserEmail)}`),
+      fetch('http://localhost:3000/api/planes'),
+    ]);
+    const cuentaData = await cuentaRes.json();
+    const planesData = await planesRes.json();
 
-    const data = await res.json();
-
-    if (!data.ok) {
-      alert(data.error || 'No se pudo agregar el saldo');
+    if (!cuentaData.ok) {
+      creditDisplay.textContent = 'Crédito disponible: no disponible';
       return;
     }
 
-    alert(`Listo. Se agregaron $${amount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} al saldo.`);
-    loadAccountData();
-    loadActivityData();
-    loadAccountTab();
+    const c = cuentaData.cuenta;
+    const creditLimit = parseFloat(c.credit_limit);
+    const usedBalance = parseFloat(c.used_balance);
+    kueskiCashState.creditRemaining = Math.max(0, creditLimit - usedBalance);
+    creditDisplay.textContent =
+      'Crédito disponible: ' + formatBalanceAmount(kueskiCashState.creditRemaining);
+
+    kueskiCashState.plans = planesData.planes || [];
+    renderKueskiCashPlans();
+    updateKueskiCashSimulation();
   } catch (err) {
-    console.error('Demo loan error:', err);
+    console.error('Error loading Kueski Cash simulator:', err);
+    creditDisplay.textContent = 'Crédito disponible: no disponible';
+  }
+}
+
+async function openKueskiCashLoan() {
+  if (!currentUserEmail) {
+    alert('Inicia sesión primero');
+    return;
+  }
+
+  document.getElementById('kueski-cash-overlay').classList.remove('hidden');
+
+  if (currentAccountProfile?.features?.kueski_cash === false) {
+    showKueskiCashStep('kueski-cash-step-blocked');
+    return;
+  }
+
+  resetKueskiCashForm();
+  showKueskiCashStep('kueski-cash-step-simulator');
+  await loadKueskiCashSimulator();
+}
+
+function closeKueskiCashLoan() {
+  document.getElementById('kueski-cash-overlay').classList.add('hidden');
+  resetKueskiCashForm();
+}
+
+function kueskiCashToDisbursement() {
+  const sim = updateKueskiCashSimulation();
+  if (!sim) {
+    alert('Ingresa un monto válido (mínimo $100) y selecciona un plazo');
+    return;
+  }
+
+  if (sim.total > kueskiCashState.creditRemaining) {
+    alert(
+      `Supera tu crédito disponible. Te quedan ${formatBalanceAmount(kueskiCashState.creditRemaining)} para préstamos.`
+    );
+    return;
+  }
+
+  kueskiCashState.amount = sim.amount;
+  kueskiCashState.disbursement = 'kueski_balance';
+  selectLoanDisbursement('kueski_balance');
+  showKueskiCashStep('kueski-cash-step-disbursement');
+}
+
+function selectLoanDisbursement(method) {
+  kueskiCashState.disbursement = method;
+  document.querySelectorAll('.kueski-cash-disbursement-option').forEach((el) => {
+    el.classList.toggle('active', el.dataset.method === method);
+  });
+
+  const isExternal = method === 'external_card';
+  document.getElementById('kueski-cash-external-card')?.classList.toggle('hidden', !isExternal);
+  document.getElementById('kueski-cash-kueski-summary')?.classList.toggle('hidden', isExternal);
+}
+
+function kueskiCashBackToSimulator() {
+  showKueskiCashStep('kueski-cash-step-simulator');
+  updateKueskiCashSimulation();
+}
+
+async function submitKueskiCashLoan() {
+  const sim = updateKueskiCashSimulation();
+  if (!sim || !kueskiCashState.selectedPlanId) {
+    alert('Completa la simulación del préstamo');
+    return;
+  }
+
+  const payload = {
+    email: currentUserEmail,
+    amount: sim.amount,
+    plan_id: kueskiCashState.selectedPlanId,
+    disbursement: kueskiCashState.disbursement,
+  };
+
+  if (kueskiCashState.disbursement === 'external_card') {
+    const cardNumber = document.getElementById('kueski-cash-ext-number').value.trim();
+    const holder = document.getElementById('kueski-cash-ext-holder').value.trim();
+    const expiry = document.getElementById('kueski-cash-ext-expiry').value.trim();
+    const cvv = document.getElementById('kueski-cash-ext-cvv').value.trim();
+
+    if (!cardNumber || !holder || !expiry || !cvv) {
+      alert('Completa todos los datos de tu tarjeta externa');
+      return;
+    }
+
+    payload.external_card = { number: cardNumber, holder, expiry, cvv };
+  }
+
+  const submitBtn = document.querySelector('[data-action="kueski-cash-submit"]');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Procesando...';
+  }
+
+  try {
+    const res = await fetch('http://localhost:3000/api/prestamo-personal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+
+    if (!data.ok) {
+      alert(data.error || 'No se pudo solicitar el préstamo');
+      return;
+    }
+
+    const prestamo = data.prestamo;
+    const msgEl = document.getElementById('kueski-cash-success-msg');
+    if (prestamo.disbursement === 'kueski_balance') {
+      msgEl.textContent =
+        `Recibiste ${formatBalanceAmount(parseFloat(prestamo.amount))} en tu saldo Kueski Pay. ` +
+        `Pagarás ${formatBalanceAmount(parseFloat(prestamo.installment_amount))} en ${prestamo.num_installments} quincenas.`;
+    } else {
+      msgEl.textContent =
+        `Tu préstamo de ${formatBalanceAmount(parseFloat(prestamo.amount))} fue enviado a tu tarjeta externa. ` +
+        `No se acreditó a tu saldo Kueski Pay. ` +
+        `Pagarás ${formatBalanceAmount(parseFloat(prestamo.installment_amount))} en ${prestamo.num_installments} quincenas.`;
+    }
+
+    showKueskiCashStep('kueski-cash-step-success');
+    if (prestamo.disbursement === 'kueski_balance') {
+      loadAccountData();
+      loadAccountTab();
+    }
+    loadActivityData();
+  } catch (err) {
+    console.error('Kueski Cash loan error:', err);
     alert('No se pudo conectar al servidor.');
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Confirmar préstamo';
+    }
   }
 }
 
@@ -1454,8 +1697,27 @@ document.addEventListener("DOMContentLoaded", () => {
         checkoutConfirm();
         break;
 
+      case 'open-kueski-cash-loan':
+        openKueskiCashLoan();
+        break;
+      case 'close-kueski-cash-loan':
+        closeKueskiCashLoan();
+        break;
+      case 'kueski-cash-to-disbursement':
+        kueskiCashToDisbursement();
+        break;
+      case 'select-loan-disbursement':
+        selectLoanDisbursement(actionEl.dataset.method);
+        break;
+      case 'kueski-cash-back-simulator':
+        kueskiCashBackToSimulator();
+        break;
+      case 'kueski-cash-submit':
+        submitKueskiCashLoan();
+        break;
+
       case 'demo-loan':
-        requestDemoLoan();
+        openKueskiCashLoan();
         break;
               
       default:
@@ -1478,6 +1740,11 @@ document.addEventListener("DOMContentLoaded", () => {
       renderStoresList();
     });
   });
+
+  const kueskiCashAmount = document.getElementById('kueski-cash-amount');
+  if (kueskiCashAmount) {
+    kueskiCashAmount.addEventListener('input', updateKueskiCashSimulation);
+  }
 });
 
 // Validate user exists in DB before letting them in

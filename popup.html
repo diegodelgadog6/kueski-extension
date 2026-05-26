@@ -343,12 +343,6 @@
             </button>
           </div>
 
-          <div class="kueski-card-info">
-            <p><strong>Tiendas no afiliadas:</strong> usa esta tarjeta como débito/crédito en el checkout de cualquier sitio.</p>
-            <p><strong>Tiendas afiliadas:</strong> también puedes pagar con Kueski Pay o con esta tarjeta.</p>
-            <p class="kueski-card-cvv-hint">El CVV es dinámico: cada vez que lo revelas se genera uno nuevo por seguridad.</p>
-          </div>
-
           <p id="kueski-card-status-note" class="kueski-card-status-note hidden"></p>
         </div>
 
@@ -473,7 +467,7 @@
               <span class="credit-limit-label">LÍMITE TOTAL</span>
               <strong class="credit-limit-val">$20,000.00</strong>
             </div>
-            <button class="btn-secondary" data-action="demo-loan" data-feature="kueski_cash" type="button">Kueski Cash</button>
+            <button class="btn-secondary" data-action="open-kueski-cash-loan" type="button">Kueski Cash</button>
           </div>
 
           <div class="section-header">
@@ -530,17 +524,17 @@
           <span class="material-symbols-outlined">home</span>
           <span>Home</span>
         </button>
-        <button class="nav-item" data-action="switch-tab" data-tab="stores">
-          <span class="material-symbols-outlined">storefront</span>
-          <span>Tiendas</span>
+        <button class="nav-item" data-action="switch-tab" data-tab="activity">
+          <span class="material-symbols-outlined">receipt_long</span>
+          <span>Actividad</span>
         </button>
         <button class="nav-item" data-action="switch-tab" data-tab="card">
           <span class="material-symbols-outlined">credit_card</span>
           <span>Tarjeta</span>
         </button>
-        <button class="nav-item" data-action="switch-tab" data-tab="activity">
-          <span class="material-symbols-outlined">receipt_long</span>
-          <span>Actividad</span>
+        <button class="nav-item" data-action="switch-tab" data-tab="stores">
+          <span class="material-symbols-outlined">storefront</span>
+          <span>Tiendas</span>
         </button>
         <button class="nav-item" data-action="switch-tab" data-tab="account">
           <span class="material-symbols-outlined">person</span>
@@ -666,11 +660,12 @@
             </div>
           </div>
 
-          <div id="txd-pay-section" class="tx-detail-section tx-detail-pay-section hidden">
-            <h3 class="tx-detail-section-title">Plan de quincenas</h3>
-            <p id="txd-installment-progress" class="installment-progress-label"></p>
-            <div id="txd-installment-timeline" class="installment-timeline"></div>
-          </div>
+        </div>
+
+        <div id="txd-pay-section" class="tx-detail-section tx-detail-pay-section hidden">
+          <h3 class="tx-detail-section-title">Plan de quincenas</h3>
+          <p id="txd-installment-progress" class="installment-progress-label"></p>
+          <div id="txd-installment-timeline" class="installment-timeline"></div>
         </div>
 
         <div id="txd-transfer-details" class="tx-detail-panel hidden">
@@ -703,16 +698,24 @@
           <div class="tx-detail-section">
             <h3 class="tx-detail-section-title">Detalle del préstamo</h3>
             <div class="tx-detail-row">
-              <span>Monto acreditado</span>
+              <span>Monto recibido</span>
               <strong id="txd-loan-amount">$0.00</strong>
+            </div>
+            <div class="tx-detail-row">
+              <span>Total a pagar</span>
+              <strong id="txd-loan-total">$0.00</strong>
+            </div>
+            <div class="tx-detail-row">
+              <span>Plazo</span>
+              <strong id="txd-loan-installments">—</strong>
+            </div>
+            <div class="tx-detail-row">
+              <span>Pago por quincena</span>
+              <strong id="txd-loan-installment-amount">$0.00</strong>
             </div>
             <div class="tx-detail-row">
               <span>Origen</span>
               <strong>Kueski Cash</strong>
-            </div>
-            <div class="tx-detail-row">
-              <span>Destino</span>
-              <strong>Saldo disponible</strong>
             </div>
             <div class="tx-detail-row">
               <span>Estado</span>
@@ -797,6 +800,121 @@
           <div class="transfer-success-icon">✅</div>
           <h2 class="transfer-success-title">Transferencia enviada exitosamente</h2>
           <button class="btn-primary" data-action="close-transfer" type="button">Listo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== KUESKI CASH LOAN OVERLAY ==================== -->
+    <div id="kueski-cash-overlay" class="overlay hidden">
+      <div class="overlay-card">
+        <div class="overlay-header">
+          <div class="header-brand">
+            <img src="assets/kueski-logo.webp" style="width:24px;height:24px;object-fit:contain" alt="Kueski">
+            <span class="brand-name">Kueski Cash</span>
+          </div>
+          <button class="icon-btn" data-action="close-kueski-cash-loan">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div id="kueski-cash-step-blocked" class="kueski-cash-step hidden">
+          <h2 class="transfer-title">Préstamo no disponible</h2>
+          <p class="kueski-cash-blocked-text">
+            Tu crédito está restringido. No puedes solicitar un préstamo personal con Kueski Cash hasta regularizar tu cuenta.
+          </p>
+          <button class="btn-primary" data-action="close-kueski-cash-loan" type="button">Entendido</button>
+        </div>
+
+        <div id="kueski-cash-step-simulator" class="kueski-cash-step">
+          <h2 class="transfer-title">Préstamo personal</h2>
+          <p class="transfer-balance" id="kueski-cash-credit-display">Crédito disponible: $0.00</p>
+
+          <div class="form-group">
+            <label>MONTO DEL PRÉSTAMO</label>
+            <input type="number" id="kueski-cash-amount" placeholder="$0.00" min="100" step="100">
+          </div>
+
+          <div class="form-group">
+            <label>PLAZO EN QUINCENAS</label>
+            <div id="kueski-cash-plan-options" class="kueski-cash-plan-options"></div>
+          </div>
+
+          <div id="kueski-cash-simulation" class="kueski-cash-simulation hidden">
+            <div class="kueski-cash-sim-row">
+              <span>Total a pagar</span>
+              <strong id="kueski-cash-sim-total">$0.00</strong>
+            </div>
+            <div class="kueski-cash-sim-row">
+              <span>Pago por quincena</span>
+              <strong id="kueski-cash-sim-installment">$0.00</strong>
+            </div>
+            <div class="kueski-cash-sim-row kueski-cash-sim-muted">
+              <span>Interés estimado</span>
+              <strong id="kueski-cash-sim-interest">$0.00</strong>
+            </div>
+          </div>
+
+          <button class="btn-primary" data-action="kueski-cash-to-disbursement" type="button">Continuar</button>
+        </div>
+
+        <div id="kueski-cash-step-disbursement" class="kueski-cash-step hidden">
+          <h2 class="transfer-title">¿Cómo recibes el dinero?</h2>
+          <p class="tab-desc">Elige dónde quieres recibir tu préstamo.</p>
+
+          <div class="kueski-cash-disbursement-options">
+            <button class="kueski-cash-disbursement-option active" type="button"
+              data-action="select-loan-disbursement" data-method="kueski_balance">
+              <span class="material-symbols-outlined">account_balance_wallet</span>
+              <div>
+                <strong>Saldo Kueski Pay</strong>
+                <span>Úsalo en comercios afiliados</span>
+              </div>
+            </button>
+            <button class="kueski-cash-disbursement-option" type="button"
+              data-action="select-loan-disbursement" data-method="external_card">
+              <span class="material-symbols-outlined">credit_card</span>
+              <div>
+                <strong>Tarjeta externa</strong>
+                <span>Recíbelo en tu tarjeta para usar donde quieras</span>
+              </div>
+            </button>
+          </div>
+
+          <div id="kueski-cash-kueski-summary" class="kueski-cash-kueski-summary">
+            <span class="material-symbols-outlined">account_balance_wallet</span>
+            <p>El monto se acreditará directamente a tu saldo Kueski Pay en esta extensión. No necesitas ingresar datos de tarjeta.</p>
+          </div>
+
+          <div id="kueski-cash-external-card" class="kueski-cash-external-card hidden">
+            <div class="form-group">
+              <label>NÚMERO DE TARJETA</label>
+              <input type="text" id="kueski-cash-ext-number" placeholder="0000 0000 0000 0000" maxlength="19" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label>TITULAR</label>
+              <input type="text" id="kueski-cash-ext-holder" placeholder="Como aparece en la tarjeta" autocomplete="off">
+            </div>
+            <div class="kueski-cash-ext-row">
+              <div class="form-group">
+                <label>VENCIMIENTO</label>
+                <input type="text" id="kueski-cash-ext-expiry" placeholder="MM/AA" maxlength="5" autocomplete="off">
+              </div>
+              <div class="form-group">
+                <label>CVV</label>
+                <input type="password" id="kueski-cash-ext-cvv" placeholder="123" maxlength="4" autocomplete="off">
+              </div>
+            </div>
+          </div>
+
+          <button class="btn-primary" data-action="kueski-cash-submit" type="button">Confirmar préstamo</button>
+          <button class="btn-secondary kueski-cash-back-btn" data-action="kueski-cash-back-simulator" type="button">Atrás</button>
+        </div>
+
+        <div id="kueski-cash-step-success" class="kueski-cash-step hidden">
+          <div class="transfer-success-icon">✅</div>
+          <h2 class="transfer-success-title">Préstamo solicitado</h2>
+          <p id="kueski-cash-success-msg" class="kueski-cash-success-msg"></p>
+          <button class="btn-primary" data-action="close-kueski-cash-loan" type="button">Listo</button>
         </div>
       </div>
     </div>

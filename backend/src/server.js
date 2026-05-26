@@ -150,7 +150,161 @@ app.post('/api/activity', async (req, res) => {
   }
 });
 
-// Demo loan/top-up endpoint for prototype presentation
+// Personal loan with Kueski Cash (simulator + disbursement)
+app.post('/api/prestamo-personal', async (req, res) => {
+  const {
+    email,
+    amount,
+    plan_id,
+    disbursement,
+    external_card,
+  } = req.body || {};
+
+  if (!email || amount == null || !plan_id || !disbursement) {
+    return res.status(400).json({
+      ok: false,
+      error: 'email, amount, plan_id y disbursement son requeridos',
+    });
+  }
+
+  const parsedAmount = Number(amount);
+  if (!Number.isFinite(parsedAmount) || parsedAmount < 100) {
+    return res.status(400).json({ ok: false, error: 'El monto mínimo es $100' });
+  }
+
+  if (!['kueski_balance', 'external_card'].includes(disbursement)) {
+    return res.status(400).json({ ok: false, error: 'Método de dispersión no válido' });
+  }
+
+  try {
+    await assertFeatureAllowed(db, email, 'kueski_cash');
+  } catch (error) {
+    return res.status(error.statusCode || 403).json({ ok: false, error: error.message });
+  }
+
+  let client;
+  try {
+    client = await db.pool.connect();
+    await client.query('BEGIN');
+
+    const accountResult = await client.query(`
+      SELECT ka.id, ka.available_balance, ka.used_balance, ka.credit_limit, u.name
+      FROM kueski_accounts ka
+      JOIN users u ON u.id = ka.user_id
+      WHERE u.email = $1 AND ka.status = 'active'
+      FOR UPDATE OF ka
+    `, [email]);
+
+    if (accountResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ ok: false, error: 'Cuenta no encontrada o inactiva' });
+    }
+
+    const account = accountResult.rows[0];
+    const planRes = await client.query(
+      'SELECT * FROM payment_plans WHERE id = $1 AND active = TRUE',
+      [plan_id]
+    );
+
+    if (planRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ ok: false, error: 'Plan no válido' });
+    }
+
+    const plan = planRes.rows[0];
+    const total = parsedAmount * (1 + parseFloat(plan.interest_rate));
+    const perInst = total / plan.num_installments;
+    const creditLimit = parseFloat(account.credit_limit);
+    const usedBalance = parseFloat(account.used_balance);
+    const creditRemaining = creditLimit - usedBalance;
+
+    if (total > creditRemaining) {
+      await client.query('ROLLBACK');
+      const remaining = Math.max(0, creditRemaining);
+      return res.status(400).json({
+        ok: false,
+        error: `Supera tu crédito disponible. Te quedan $${remaining.toLocaleString('es-MX', { minimumFractionDigits: 2 })} para préstamos.`,
+      });
+    }
+
+    if (disbursement === 'external_card') {
+      const cardNumber = String(external_card?.number || '').replace(/\D/g, '');
+      const holder = String(external_card?.holder || '').trim();
+      const expiry = String(external_card?.expiry || '').trim();
+      const cvv = String(external_card?.cvv || '').replace(/\D/g, '');
+      if (cardNumber.length < 15 || !holder || !/^\d{2}\/\d{2}$/.test(expiry) || cvv.length < 3) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ ok: false, error: 'Datos de tarjeta externa incompletos o inválidos' });
+      }
+    }
+
+    let newBalance = parseFloat(account.available_balance);
+    if (disbursement === 'kueski_balance') {
+      newBalance += parsedAmount;
+      await client.query(`
+        UPDATE kueski_accounts
+        SET available_balance = available_balance + $1,
+            used_balance = used_balance + $2,
+            updated_at = NOW()
+        WHERE id = $3
+      `, [parsedAmount.toFixed(2), total.toFixed(2), account.id]);
+    } else {
+      await client.query(`
+        UPDATE kueski_accounts
+        SET used_balance = used_balance + $1,
+            updated_at = NOW()
+        WHERE id = $2
+      `, [total.toFixed(2), account.id]);
+    }
+
+    const txRes = await client.query(`
+      INSERT INTO transactions
+        (account_id, plan_id, merchant_id, original_amount, discount_amount, total_amount, amount_per_installment, status)
+      VALUES ($1, $2, NULL, $3, 0, $4, $5, 'loaned')
+      RETURNING id, created_at
+    `, [account.id, plan.id, parsedAmount.toFixed(2), total.toFixed(2), perInst.toFixed(2)]);
+
+    const transactionId = txRes.rows[0].id;
+    for (let i = 1; i <= plan.num_installments; i += 1) {
+      await client.query(`
+        INSERT INTO installments (transaction_id, installment_no, amount, due_date, status)
+        VALUES ($1, $2, $3, CURRENT_DATE + ($4 * INTERVAL '15 days'), 'pending')
+      `, [transactionId, i, perInst.toFixed(2), i]);
+    }
+
+    const disbursementLabel = disbursement === 'kueski_balance'
+      ? 'saldo Kueski Pay'
+      : `tarjeta externa terminada en ${String(external_card?.number || '').replace(/\D/g, '').slice(-4)}`;
+
+    await client.query(
+      'INSERT INTO user_activity (merchant_id, action, details) VALUES (NULL, $1, $2)',
+      ['loan_personal', `Préstamo personal de $${parsedAmount.toFixed(2)} en ${plan.num_installments} quincenas → ${disbursementLabel}`]
+    );
+
+    await client.query('COMMIT');
+
+    return res.status(201).json({
+      ok: true,
+      prestamo: {
+        amount: parsedAmount.toFixed(2),
+        total: total.toFixed(2),
+        installment_amount: perInst.toFixed(2),
+        num_installments: plan.num_installments,
+        disbursement,
+        balance_credited: disbursement === 'kueski_balance',
+        new_balance: newBalance.toFixed(2),
+        transaction_id: transactionId,
+      },
+    });
+  } catch (error) {
+    if (client) await client.query('ROLLBACK');
+    return res.status(500).json({ ok: false, error: error.message });
+  } finally {
+    if (client) client.release();
+  }
+});
+
+// Demo loan/top-up endpoint (legacy quick top-up)
 app.post('/api/prestamo-demo', async (req, res) => {
   const { email, amount } = req.body || {};
 

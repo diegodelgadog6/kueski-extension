@@ -43,6 +43,10 @@ body {
   vertical-align: middle;
 }
 
+.hidden {
+  display: none !important;
+}
+
 /* ===== VIEWS & ROUTING ===== */
 .view {
   display: none;
@@ -872,31 +876,6 @@ button.feature-disabled {
   gap: 6px;
 }
 
-.kueski-card-info {
-  background: var(--surface-container-low);
-  border-radius: 14px;
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.kueski-card-info p {
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--on-surface-variant);
-  margin: 0;
-}
-
-.kueski-card-info strong {
-  color: var(--on-surface);
-}
-
-.kueski-card-cvv-hint {
-  font-size: 11px !important;
-  opacity: 0.85;
-}
-
 .kueski-card-status-note {
   margin-top: 12px;
   font-size: 12px;
@@ -1109,6 +1088,22 @@ button.feature-disabled {
 .tx-status.pending {
   background: #fff3e0;
   color: #e67e22;
+}
+.btn-tx-more {
+  display: inline-block;
+  margin-top: 6px;
+  border: 1px solid var(--outline-variant);
+  background: #fff;
+  color: var(--primary);
+  font-family: "Manrope", sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 50px;
+  cursor: pointer;
+}
+.btn-tx-more:hover {
+  background: var(--surface-container-low);
 }
 
 /* ===== ACCOUNT TAB ===== */
@@ -1581,6 +1576,167 @@ button.feature-disabled {
   font-size: 18px;
   font-weight: 700;
   color: var(--green-dark);
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+/* ===== KUESKI CASH LOAN ===== */
+.kueski-cash-step.hidden {
+  display: none;
+}
+
+.kueski-cash-blocked-text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--on-surface-variant);
+  margin-bottom: 20px;
+}
+
+.kueski-cash-plan-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kueski-cash-plan-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 12px 14px;
+  border: 2px solid var(--outline-variant);
+  border-radius: 12px;
+  background: var(--surface);
+  cursor: pointer;
+  text-align: left;
+}
+
+.kueski-cash-plan-option strong {
+  font-size: 14px;
+  color: var(--on-surface);
+}
+
+.kueski-cash-plan-option span {
+  font-size: 12px;
+  color: var(--on-surface-variant);
+}
+
+.kueski-cash-plan-option.active {
+  border-color: var(--primary);
+  background: var(--surface-container-low);
+}
+
+.kueski-cash-simulation {
+  background: var(--surface-container-low);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.kueski-cash-sim-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  padding: 4px 0;
+}
+
+.kueski-cash-sim-row strong {
+  font-size: 14px;
+  color: var(--on-surface);
+}
+
+.kueski-cash-sim-muted {
+  color: var(--on-surface-variant);
+}
+
+.kueski-cash-disbursement-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.kueski-cash-disbursement-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 14px;
+  border: 2px solid var(--outline-variant);
+  border-radius: 14px;
+  background: var(--surface);
+  cursor: pointer;
+  text-align: left;
+}
+
+.kueski-cash-disbursement-option .material-symbols-outlined {
+  color: var(--primary);
+  font-size: 24px;
+  margin-top: 2px;
+}
+
+.kueski-cash-disbursement-option strong {
+  display: block;
+  font-size: 14px;
+  color: var(--on-surface);
+  margin-bottom: 2px;
+}
+
+.kueski-cash-disbursement-option span {
+  display: block;
+  font-size: 12px;
+  color: var(--on-surface-variant);
+  line-height: 1.35;
+}
+
+.kueski-cash-disbursement-option.active {
+  border-color: var(--primary);
+  background: var(--surface-container-low);
+}
+
+.kueski-cash-external-card {
+  margin-bottom: 16px;
+}
+
+.kueski-cash-kueski-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  margin-bottom: 16px;
+  border-radius: 14px;
+  background: var(--surface-container-low);
+  border: 1px solid var(--outline-variant);
+}
+
+.kueski-cash-kueski-summary .material-symbols-outlined {
+  color: var(--primary);
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.kueski-cash-kueski-summary p {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--on-surface-variant);
+}
+
+.kueski-cash-ext-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.kueski-cash-back-btn {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.kueski-cash-success-msg {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--on-surface-variant);
   text-align: center;
   margin-bottom: 20px;
 }
