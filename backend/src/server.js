@@ -23,11 +23,31 @@ function sqlIsLoanTransaction(tAlias = 't') {
   return `(${tAlias}.merchant_id IS NULL AND ${tAlias}.coupon_id IS NULL)`;
 }
 
+function normalizeMerchantHost(hostname) {
+  return String(hostname || '')
+    .replace(/^www\./i, '')
+    .replace(/^m\./i, '')
+    .toLowerCase();
+}
+
+const MERCHANT_DOMAIN_ALIASES = {
+  'adidas.com.mx': ['adidas.mx'],
+  'adidas.mx': ['adidas.com.mx'],
+  'shein.com': ['shein.com.mx'],
+  'shein.com.mx': ['shein.com'],
+};
+
 function hostnameMatchesMerchant(hostname, merchantDomain) {
-  const host = String(hostname || '').replace(/^www\./i, '').toLowerCase();
-  const merchant = String(merchantDomain || '').toLowerCase();
+  const host = normalizeMerchantHost(hostname);
+  const merchant = normalizeMerchantHost(merchantDomain);
   if (!host || !merchant) return false;
-  return host === merchant || host.endsWith(`.${merchant}`);
+  if (host === merchant || host.endsWith(`.${merchant}`)) return true;
+
+  const aliases = [
+    ...(MERCHANT_DOMAIN_ALIASES[merchant] || []),
+    ...(MERCHANT_DOMAIN_ALIASES[host] || []),
+  ];
+  return aliases.some((alias) => host === alias || host.endsWith(`.${alias}`));
 }
 
 function buildVirtualCardNumber(accountId) {
@@ -57,7 +77,7 @@ function generateDynamicCvv() {
 }
 
 async function findAffiliatedMerchant(hostname) {
-  const host = String(hostname || '').replace(/^www\./i, '').toLowerCase();
+  const host = normalizeMerchantHost(hostname);
   const result = await db.query(`
     SELECT id, name, domain
     FROM merchants
@@ -91,7 +111,7 @@ app.get('/api/merchants/check', async (req, res) => {
     }
 
     const tier = await resolveCreditTier(db, email);
-    const host = domain.replace(/^www\./i, '');
+    const host = normalizeMerchantHost(domain);
     const merchant = await findAffiliatedMerchant(host);
 
     if (!merchant) {
@@ -240,7 +260,7 @@ app.post('/api/prestamo-personal', async (req, res) => {
       const holder = String(external_card?.holder || '').trim();
       const expiry = String(external_card?.expiry || '').trim();
       const cvv = String(external_card?.cvv || '').replace(/\D/g, '');
-      if (cardNumber.length < 15 || !holder || !/^\d{2}\/\d{2}$/.test(expiry) || cvv.length < 3) {
+      if (cardNumber.length < 15 || !holder || !/^\d{2}\/\d{2}$/.test(expiry) || cvv.length !== 3) {
         await client.query('ROLLBACK');
         return res.status(400).json({ ok: false, error: 'Datos de tarjeta externa incompletos o inválidos' });
       }
@@ -413,6 +433,7 @@ app.get('/api/cupones/check', async (req, res) => {
   if (!codigo) return res.status(400).json({ ok: false, error: 'codigo requerido' });
   try {
     const tier = await resolveCreditTier(db, email);
+    const merchant = domain ? await findAffiliatedMerchant(domain) : null;
     const result = await db.query(`
       SELECT c.*, m.name AS merchant_name, m.domain AS merchant_domain
       FROM coupons c
@@ -420,8 +441,8 @@ app.get('/api/cupones/check', async (req, res) => {
       WHERE UPPER(c.code) = UPPER($1)
         AND c.active = TRUE
         AND (c.expires_at IS NULL OR c.expires_at >= CURRENT_DATE)
-        AND ($2 = '' OR m.domain = $2)
-    `, [codigo, domain || '']);
+        AND ($2::int IS NULL OR m.id = $2)
+    `, [codigo, merchant?.id || null]);
     if (result.rows.length === 0)
       return res.json({ ok: false, valido: false, mensaje: 'Cupón no válido o expirado' });
     const cupon = {
@@ -983,14 +1004,15 @@ app.post('/api/transacciones', async (req, res) => {
     }
     const plan = planRes.rows[0];
     let discount = 0, coupon_id = null;
+    const checkoutMerchant = domain ? await findAffiliatedMerchant(domain) : null;
     if (coupon_code) {
       const tier = await resolveCreditTier(db, email);
       const couponRes = await client.query(`
         SELECT c.* FROM coupons c JOIN merchants m ON m.id = c.merchant_id
         WHERE UPPER(c.code) = UPPER($1) AND c.active = TRUE
           AND (c.expires_at IS NULL OR c.expires_at >= CURRENT_DATE)
-          AND ($2 = '' OR m.domain = $2)
-      `, [coupon_code, domain || '']);
+          AND ($2::int IS NULL OR m.id = $2)
+      `, [coupon_code, checkoutMerchant?.id || null]);
       if (couponRes.rows.length > 0) {
         const coupon = couponRes.rows[0];
         coupon_id = coupon.id;
@@ -1014,10 +1036,7 @@ app.post('/api/transacciones', async (req, res) => {
       });
     }
 
-    const merchantRes = await client.query(
-      'SELECT id FROM merchants WHERE domain = $1', [domain || '']
-    );
-    const merchant_id = merchantRes.rows[0]?.id || null;
+    const merchant_id = checkoutMerchant?.id || null;
     const txRes = await client.query(`
       INSERT INTO transactions
         (account_id, plan_id, coupon_id, merchant_id,
@@ -1151,6 +1170,13 @@ async function ensureTransferSchema() {
   await ensureDemoUsers(db);
 
   await db.query(`
+    UPDATE merchants SET domain = 'adidas.mx' WHERE domain = 'adidas.com.mx'
+  `);
+  await db.query(`
+    UPDATE merchants SET domain = 'shein.com.mx' WHERE domain = 'shein.com'
+  `);
+
+  await db.query(`
     UPDATE coupons c
     SET discount = seed.discount
     FROM merchants m,
@@ -1163,8 +1189,8 @@ async function ensureTransferSchema() {
       ('att.com.mx', 'MSI disponible'),
       ('officedepot.com.mx', '8% cashback'),
       ('puma.com', '18% off'),
-      ('adidas.com.mx', '22% off'),
-      ('shein.com', '30% off')
+      ('adidas.mx', '22% off'),
+      ('shein.com.mx', '30% off')
     ) AS seed(domain, discount)
     WHERE c.merchant_id = m.id
       AND m.domain = seed.domain

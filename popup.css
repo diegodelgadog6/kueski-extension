@@ -447,11 +447,12 @@ body {
 }
 
 .home-product-context {
-  background: var(--surface-container-low);
-  border: 1px solid var(--outline-variant);
+  background: linear-gradient(135deg, var(--green), var(--green-dark));
+  border: none;
   border-radius: 20px;
-  padding: 18px 20px;
+  padding: 20px;
   margin-bottom: 16px;
+  color: white;
 }
 
 .home-product-label,
@@ -459,7 +460,7 @@ body {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.8px;
-  color: var(--on-surface-variant);
+  color: rgba(255, 255, 255, 0.85);
   margin-bottom: 6px;
 }
 
@@ -467,7 +468,7 @@ body {
 .checkout-product-name {
   font-size: 16px;
   font-weight: 800;
-  color: var(--on-surface);
+  color: white;
   line-height: 1.35;
   margin-bottom: 6px;
 }
@@ -476,7 +477,7 @@ body {
 .checkout-product-price {
   font-size: 18px;
   font-weight: 800;
-  color: var(--primary);
+  color: white;
   margin-bottom: 6px;
 }
 
@@ -484,7 +485,7 @@ body {
 .checkout-product-promo {
   font-size: 13px;
   font-weight: 600;
-  color: var(--green-dark);
+  color: rgba(255, 255, 255, 0.95);
   line-height: 1.4;
   margin-top: 4px;
 }
@@ -497,14 +498,21 @@ body {
 .home-product-pay-btn {
   width: 100%;
   margin-top: 12px;
+  background: white;
+  color: var(--green-dark);
+}
+
+.home-product-pay-btn:hover {
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .checkout-product-card {
-  background: var(--surface-container-low);
-  border: 1px solid var(--outline-variant);
+  background: linear-gradient(135deg, var(--green), var(--green-dark));
+  border: none;
   border-radius: 16px;
   padding: 16px;
   margin-bottom: 16px;
+  color: white;
 }
 
 .checkout-manual-hint {

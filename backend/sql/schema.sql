@@ -96,8 +96,8 @@ VALUES
   ('att.com.mx', 'AT&T', TRUE),
   ('officedepot.com.mx', 'Office Depot', TRUE),
   ('puma.com', 'Puma', TRUE),
-  ('adidas.com.mx', 'Adidas', TRUE),
-  ('shein.com', 'Shein', TRUE)
+  ('adidas.mx', 'Adidas', TRUE),
+  ('shein.com.mx', 'Shein', TRUE)
 ON CONFLICT (domain) DO NOTHING;
 
 INSERT INTO coupons (merchant_id, code, discount, expires_at, active)
@@ -112,8 +112,8 @@ FROM (
     ('att.com.mx', 'ATT_MSI', 'MSI disponible', NULL),
     ('officedepot.com.mx', 'OFFICE5', '8% cashback', '2026-12-31'::DATE),
     ('puma.com', 'PUMA15', '18% off', '2026-12-31'::DATE),
-    ('adidas.com.mx', 'ADIDAS20', '22% off', '2026-12-31'::DATE),
-    ('shein.com', 'SHEIN25', '30% off', '2026-12-31'::DATE)
+    ('adidas.mx', 'ADIDAS20', '22% off', '2026-12-31'::DATE),
+    ('shein.com.mx', 'SHEIN25', '30% off', '2026-12-31'::DATE)
 ) AS seed(domain, code, discount, expires_at)
 JOIN merchants m ON m.domain = seed.domain
 WHERE NOT EXISTS (

@@ -11,8 +11,8 @@ const AFFILIATED_MERCHANTS = [
   { domain: 'att.com.mx', name: 'AT&T' },
   { domain: 'officedepot.com.mx', name: 'Office Depot' },
   { domain: 'puma.com', name: 'Puma' },
-  { domain: 'adidas.com.mx', name: 'Adidas' },
-  { domain: 'shein.com', name: 'Shein' }
+  { domain: 'adidas.mx', name: 'Adidas' },
+  { domain: 'shein.com.mx', name: 'Shein' }
 ];
 
 async function checkMerchantFromApi(domain) {
@@ -27,11 +27,31 @@ async function checkMerchantFromApi(domain) {
   return response.json();
 }
 
+function normalizeMerchantHost(hostname) {
+  return String(hostname || '')
+    .replace(/^www\./i, '')
+    .replace(/^m\./i, '')
+    .toLowerCase();
+}
+
+const MERCHANT_DOMAIN_ALIASES = {
+  'adidas.com.mx': ['adidas.mx'],
+  'adidas.mx': ['adidas.com.mx'],
+  'shein.com': ['shein.com.mx'],
+  'shein.com.mx': ['shein.com'],
+};
+
 function hostnameMatchesMerchant(hostname, merchantDomain) {
-  const host = String(hostname || '').replace(/^www\./i, '').toLowerCase();
-  const merchant = String(merchantDomain || '').toLowerCase();
+  const host = normalizeMerchantHost(hostname);
+  const merchant = normalizeMerchantHost(merchantDomain);
   if (!host || !merchant) return false;
-  return host === merchant || host.endsWith(`.${merchant}`);
+  if (host === merchant || host.endsWith(`.${merchant}`)) return true;
+
+  const aliases = [
+    ...(MERCHANT_DOMAIN_ALIASES[merchant] || []),
+    ...(MERCHANT_DOMAIN_ALIASES[host] || []),
+  ];
+  return aliases.some((alias) => host === alias || host.endsWith(`.${alias}`));
 }
 
 function checkMerchantFallback(domain) {

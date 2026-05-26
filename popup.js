@@ -17,7 +17,9 @@ const STORE_META = {
   'att.com.mx': { icon: '📱', slug: 'att', category: 'Electrónica' },
   'officedepot.com.mx': { icon: '🖨️', slug: 'office depot', category: 'Oficina' },
   'puma.com': { icon: '🐆', slug: 'puma', category: 'Deportes' },
+  'adidas.mx': { icon: '👟', slug: 'adidas', category: 'Deportes' },
   'adidas.com.mx': { icon: '👟', slug: 'adidas', category: 'Deportes' },
+  'shein.com.mx': { icon: '👚', slug: 'shein', category: 'Moda' },
   'shein.com': { icon: '👚', slug: 'shein', category: 'Moda' },
 };
 
@@ -1042,15 +1044,23 @@ const storeUrls = {
   'att': 'https://www.att.com.mx',
   'office depot': 'https://www.officedepot.com.mx',
   'puma': 'https://www.puma.com',
-  'adidas': 'https://www.adidas.com.mx',
-  'shein': 'https://www.shein.com'
+  'adidas': 'https://www.adidas.mx',
+  'shein': 'https://www.shein.com.mx',
+};
+
+const storeUrlsByDomain = {
+  'adidas.com.mx': 'https://www.adidas.mx',
+  'adidas.mx': 'https://www.adidas.mx',
+  'shein.com': 'https://www.shein.com.mx',
+  'shein.com.mx': 'https://www.shein.com.mx',
 };
 
 // ===== OPEN STORE IN NEW TAB =====
 function openStore(storeName) {
-  const url = storeUrls[storeName.toLowerCase()];
+  const key = String(storeName || '').toLowerCase();
+  const url = storeUrls[key] || storeUrlsByDomain[key];
   if (url) {
-    chrome.tabs.create({ url: url });
+    chrome.tabs.create({ url });
   }
 }
 
@@ -1596,6 +1606,29 @@ function kueskiCashToDisbursement() {
   showKueskiCashStep('kueski-cash-step-disbursement');
 }
 
+function formatCardExpiryInput(value) {
+  const digits = String(value || '').replace(/\D/g, '').slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
+
+function setupKueskiCashCardInputs() {
+  const expiryInput = document.getElementById('kueski-cash-ext-expiry');
+  const cvvInput = document.getElementById('kueski-cash-ext-cvv');
+
+  if (expiryInput) {
+    expiryInput.addEventListener('input', () => {
+      expiryInput.value = formatCardExpiryInput(expiryInput.value);
+    });
+  }
+
+  if (cvvInput) {
+    cvvInput.addEventListener('input', () => {
+      cvvInput.value = cvvInput.value.replace(/\D/g, '').slice(0, 3);
+    });
+  }
+}
+
 function selectLoanDisbursement(method) {
   kueskiCashState.disbursement = method;
   document.querySelectorAll('.kueski-cash-disbursement-option').forEach((el) => {
@@ -1632,8 +1665,8 @@ async function submitKueskiCashLoan() {
     const expiry = document.getElementById('kueski-cash-ext-expiry').value.trim();
     const cvv = document.getElementById('kueski-cash-ext-cvv').value.trim();
 
-    if (!cardNumber || !holder || !expiry || !cvv) {
-      alert('Completa todos los datos de tu tarjeta externa');
+    if (!cardNumber || !holder || !expiry || cvv.length !== 3) {
+      alert('Completa todos los datos de tu tarjeta externa (CVV de 3 dígitos)');
       return;
     }
 
@@ -1879,6 +1912,8 @@ document.addEventListener("DOMContentLoaded", () => {
   if (kueskiCashAmount) {
     kueskiCashAmount.addEventListener('input', updateKueskiCashSimulation);
   }
+
+  setupKueskiCashCardInputs();
 });
 
 // Validate user exists in DB before letting them in
