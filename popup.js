@@ -1,5 +1,72 @@
 // Track the currently logged-in user
 let currentUserEmail = null;
+let currentAccountProfile = null;
+
+function applyCreditProfile(c) {
+  if (!c) return;
+  currentAccountProfile = c;
+
+  const tier = c.credit_tier || 'good';
+  const healthLabel = c.credit_health_label || 'Salud buena';
+  const features = c.features || {};
+
+  const healthEl = document.getElementById('credit-health-label');
+  if (healthEl) healthEl.textContent = healthLabel;
+
+  const memberBadge = document.getElementById('member-badge');
+  if (memberBadge) memberBadge.textContent = c.member_badge || 'Miembro';
+
+  const balanceStatus = document.getElementById('balance-status');
+  if (balanceStatus) {
+    if (tier === 'limited' || c.status === 'restricted') {
+      balanceStatus.className = 'balance-status balance-status-warning';
+      balanceStatus.innerHTML =
+        '<span class="material-symbols-outlined tiny">warning</span> Crédito limitado';
+    } else {
+      balanceStatus.className = 'balance-status balance-status-active';
+      balanceStatus.innerHTML =
+        '<span class="material-symbols-outlined tiny">check_circle</span> Cuenta activa';
+    }
+  }
+
+  const homeCreditCard = document.querySelector('#tab-home .credit-card');
+  if (homeCreditCard) {
+    homeCreditCard.classList.remove('credit-health-good', 'credit-health-regular', 'credit-health-limited');
+    homeCreditCard.classList.add(`credit-health-${tier}`);
+    const fill = homeCreditCard.querySelector('.progress-fill');
+    if (fill) {
+      fill.classList.remove('progress-fill-good', 'progress-fill-regular', 'progress-fill-limited');
+      fill.classList.add(`progress-fill-${tier}`);
+    }
+  }
+
+  const accountFill = document.querySelector('#tab-account .progress-fill');
+  if (accountFill) {
+    accountFill.classList.remove('progress-fill-good', 'progress-fill-regular', 'progress-fill-limited');
+    accountFill.classList.add(`progress-fill-${tier}`);
+  }
+
+  document.querySelectorAll('[data-feature]').forEach((el) => {
+    const feature = el.dataset.feature;
+    const enabled = features[feature] !== false;
+    el.classList.toggle('feature-disabled', !enabled);
+    if (el.tagName === 'BUTTON') el.disabled = !enabled;
+  });
+
+  const banner = document.getElementById('account-restricted-banner');
+  if (banner) {
+    const showBanner = tier === 'limited' || (c.overdue_count || 0) > 0;
+    banner.classList.toggle('hidden', !showBanner);
+  }
+}
+
+function ensureFeatureAccess(feature, message) {
+  if (currentAccountProfile?.features?.[feature] === false) {
+    alert(message);
+    return false;
+  }
+  return true;
+}
 
 // Restore session when popup opens
 chrome.storage.local.get('userEmail', (result) => {
@@ -70,6 +137,7 @@ async function loadAccountData() {
     if (!data.ok) return;
 
     const c = data.cuenta;
+    applyCreditProfile(c);
 
     // Update balance (Home tab)
     const homeBalance = document.querySelector('#tab-home .balance-amount');
@@ -368,6 +436,7 @@ async function loadAccountTab() {
     if (!data.ok) return;
 
     const c = data.cuenta;
+    applyCreditProfile(c);
 
     // Update name and initials avatar
     const initials = c.name.split(' ').map(p => p[0]).join('').substring(0, 2).toUpperCase();
@@ -451,6 +520,9 @@ function openStore(storeName) {
 
 // ===== COUPON DETAIL =====
 function showCouponDetail(code, amount, desc, expiry) {
+  if (!ensureFeatureAccess('purchases', 'Las compras con Kueski Pay están bloqueadas por pagos vencidos o crédito limitado.')) {
+    return;
+  }
   document.getElementById("cd-code").textContent = code;
   document.getElementById("cd-amount").textContent = amount;
   document.getElementById("cd-expiry").textContent =
@@ -669,6 +741,9 @@ function resetTransferSteps() {
 }
 
 function openTransfer() {
+  if (!ensureFeatureAccess('transfers', 'Las transferencias no están disponibles con tu estatus de crédito actual.')) {
+    return;
+  }
   resetTransferSteps();
   document.getElementById('transfer-overlay').classList.remove('hidden');
   refreshTransferBalance();
@@ -811,6 +886,9 @@ function filterStores() {
 async function requestDemoLoan() {
   if (!currentUserEmail) {
     alert("Inicia sesión primero");
+    return;
+  }
+  if (!ensureFeatureAccess('kueski_cash', 'Kueski Cash no está disponible con tu estatus de crédito actual.')) {
     return;
   }
 
@@ -1031,7 +1109,7 @@ async function loginUser(email) {
     const data = await res.json();
 
     if (!data.ok) {
-      alert("Usuario no encontrado. Usa ana.garcia@demo.com para la demo.");
+      alert("Usuario no encontrado. Prueba bueno@demo.com, regular@demo.com o limitado@demo.com");
       return;
     }
 
@@ -1076,6 +1154,9 @@ let checkoutState = { domain: '', merchantName: '', couponCode: '', planId: null
 
 //  Open Kueski Pay Checkout Step 1
 async function openCheckout() {
+  if (!ensureFeatureAccess('purchases', 'Las compras con Kueski Pay están bloqueadas por pagos vencidos o crédito limitado.')) {
+    return;
+  }
   try {
     // Get domain of current site
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
