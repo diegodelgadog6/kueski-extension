@@ -14,7 +14,6 @@ const STORE_META = {
   'privalia.com.mx': { icon: '👗', slug: 'privalia', category: 'Moda' },
   'nike.com': { icon: '👟', slug: 'nike', category: 'Deportes' },
   'zara.com': { icon: '👔', slug: 'zara', category: 'Moda' },
-  'att.com.mx': { icon: '📱', slug: 'att', category: 'Electrónica' },
   'officedepot.com.mx': { icon: '🖨️', slug: 'office depot', category: 'Oficina' },
   'puma.com': { icon: '🐆', slug: 'puma', category: 'Deportes' },
   'adidas.mx': { icon: '👟', slug: 'adidas', category: 'Deportes' },
@@ -1047,7 +1046,6 @@ const storeUrls = {
   'privalia': 'https://www.privalia.com.mx',
   'nike': 'https://www.nike.com',
   'zara': 'https://www.zara.com',
-  'att': 'https://www.att.com.mx',
   'office depot': 'https://www.officedepot.com.mx',
   'puma': 'https://www.puma.com',
   'adidas': 'https://www.adidas.mx',
@@ -1059,6 +1057,9 @@ const storeUrlsByDomain = {
   'adidas.mx': 'https://www.adidas.mx',
   'shein.com': 'https://www.shein.com.mx',
   'shein.com.mx': 'https://www.shein.com.mx',
+  'm.shein.com.mx': 'https://www.shein.com.mx',
+  'm.shein.com': 'https://www.shein.com.mx',
+  'mx.shein.com': 'https://www.shein.com.mx',
 };
 
 // ===== OPEN STORE IN NEW TAB =====

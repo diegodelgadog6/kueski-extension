@@ -35,6 +35,8 @@ const MERCHANT_DOMAIN_ALIASES = {
   'adidas.mx': ['adidas.com.mx'],
   'shein.com': ['shein.com.mx'],
   'shein.com.mx': ['shein.com'],
+  'm.shein.com.mx': ['shein.com.mx'],
+  'mx.shein.com': ['shein.com.mx'],
 };
 
 function hostnameMatchesMerchant(hostname, merchantDomain) {
@@ -1175,6 +1177,9 @@ async function ensureTransferSchema() {
   await db.query(`
     UPDATE merchants SET domain = 'shein.com.mx' WHERE domain = 'shein.com'
   `);
+  await db.query(`
+    UPDATE merchants SET active = FALSE WHERE domain = 'att.com.mx'
+  `);
 
   await db.query(`
     UPDATE coupons c
@@ -1186,7 +1191,6 @@ async function ensureTransferSchema() {
       ('privalia.com.mx', '15% off'),
       ('nike.com', '25% off'),
       ('zara.com', '18% off'),
-      ('att.com.mx', 'MSI disponible'),
       ('officedepot.com.mx', '8% cashback'),
       ('puma.com', '18% off'),
       ('adidas.mx', '22% off'),

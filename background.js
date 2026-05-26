@@ -8,7 +8,6 @@ const AFFILIATED_MERCHANTS = [
   { domain: 'privalia.com.mx', name: 'Privalia' },
   { domain: 'nike.com', name: 'Nike' },
   { domain: 'zara.com', name: 'Zara' },
-  { domain: 'att.com.mx', name: 'AT&T' },
   { domain: 'officedepot.com.mx', name: 'Office Depot' },
   { domain: 'puma.com', name: 'Puma' },
   { domain: 'adidas.mx', name: 'Adidas' },
@@ -39,6 +38,8 @@ const MERCHANT_DOMAIN_ALIASES = {
   'adidas.mx': ['adidas.com.mx'],
   'shein.com': ['shein.com.mx'],
   'shein.com.mx': ['shein.com'],
+  'm.shein.com.mx': ['shein.com.mx'],
+  'mx.shein.com': ['shein.com.mx'],
 };
 
 function hostnameMatchesMerchant(hostname, merchantDomain) {

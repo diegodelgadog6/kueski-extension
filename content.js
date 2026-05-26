@@ -1,7 +1,14 @@
 // ===== KUESKI SMART WIDGET - CONTENT SCRIPT =====
 
 (function () {
-  const currentDomain = window.location.hostname.replace(/^www\./i, '');
+  function normalizeMerchantHost(hostname) {
+    return String(hostname || '')
+      .replace(/^www\./i, '')
+      .replace(/^m\./i, '')
+      .toLowerCase();
+  }
+
+  const currentDomain = normalizeMerchantHost(window.location.hostname);
 
   function parsePriceValue(raw) {
     if (raw == null) return null;
@@ -147,19 +154,239 @@
     return product;
   }
 
+  const HEADER_SELECTORS = [
+    '.shein-header',
+    '.c-nav-bar',
+    '.c-nav',
+    '[class*="header_container"]',
+    '[class*="common-header"]',
+    'header[role="banner"]',
+    'header',
+    '[role="banner"]',
+    'nav[aria-label*="main" i]',
+    'nav.global-header',
+    '#header',
+    '#navbar',
+    '#nav-main',
+    '.site-header',
+    '.global-header',
+    '.header',
+    'nav',
+  ];
+
+  function isElementVisible(el) {
+    if (!el || !el.getBoundingClientRect) return false;
+    const rect = el.getBoundingClientRect();
+    return rect.height > 24 && rect.width > 100;
+  }
+
+  function isNearPageTop(el) {
+    const top = el.getBoundingClientRect().top;
+    return top >= -20 && top <= 160;
+  }
+
+  function isFixedOrSticky(el) {
+    const pos = getComputedStyle(el).position;
+    return pos === 'fixed' || pos === 'sticky';
+  }
+
+  function findTopFixedBar() {
+    const nodes = document.body?.querySelectorAll('div, nav, header') || [];
+    let best = null;
+    let bestTop = Infinity;
+
+    for (const el of nodes) {
+      if (el.id === 'kueski-banner' || el.closest('#kueski-banner')) continue;
+      if (!isFixedOrSticky(el) || !isElementVisible(el)) continue;
+      const top = el.getBoundingClientRect().top;
+      if (top > 80) continue;
+      if (top < bestTop) {
+        bestTop = top;
+        best = el;
+      }
+    }
+
+    return best;
+  }
+
+  function findHeaderAnchor() {
+    let best = null;
+    let bestTop = Infinity;
+
+    for (const selector of HEADER_SELECTORS) {
+      const candidates = document.querySelectorAll(selector);
+      for (const el of candidates) {
+        if (el.id === 'kueski-banner' || el.closest('#kueski-banner')) continue;
+        if (!isElementVisible(el) || !isNearPageTop(el)) continue;
+        const top = el.getBoundingClientRect().top;
+        if (top < bestTop) {
+          bestTop = top;
+          best = el;
+        }
+      }
+    }
+
+    return best || findTopFixedBar();
+  }
+
+  function applyBannerLayout(banner, anchor) {
+    banner.style.marginTop = '';
+    if (!anchor) return;
+
+    if (isFixedOrSticky(anchor)) {
+      banner.style.marginTop = `${Math.ceil(anchor.getBoundingClientRect().height)}px`;
+    }
+  }
+
+  function watchBannerLayout(banner, anchor) {
+    applyBannerLayout(banner, anchor);
+    if (!anchor || typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(() => applyBannerLayout(banner, anchor));
+    observer.observe(anchor);
+  }
+
+  function bannerStorageKey(domain) {
+    return `kueskiBannerDismissed_${domain}`;
+  }
+
+  async function isBannerDismissed(domain) {
+    try {
+      const stored = await chrome.storage.session.get([bannerStorageKey(domain)]);
+      return stored[bannerStorageKey(domain)] === true;
+    } catch (_err) {
+      return false;
+    }
+  }
+
+  async function rememberBannerDismissed(domain) {
+    try {
+      await chrome.storage.session.set({ [bannerStorageKey(domain)]: true });
+    } catch (_err) {
+      // Ignore storage errors in content script.
+    }
+  }
+
+  function wireBannerEvents(banner, merchant) {
+    banner.querySelector('#kueski-pay-btn')?.addEventListener('click', () => {
+      const product = scanAndPublishProduct();
+
+      chrome.runtime.sendMessage(
+        { type: 'OPEN_POPUP', domain: currentDomain, product },
+        (response) => {
+          if (response && response.ok) return;
+
+          chrome.runtime.sendMessage({ type: 'HIGHLIGHT_ICON' });
+          chrome.runtime.sendMessage({
+            type: 'LOG_ACTIVITY',
+            domain: currentDomain,
+            action: 'opened_widget',
+            details: `Pago iniciado en ${merchant.name}`,
+          });
+
+          const hint = banner.querySelector('.kueski-banner-text span');
+          const payBtn = banner.querySelector('#kueski-pay-btn');
+          if (hint) {
+            hint.textContent =
+              'Abre la extensión de Kueski en tu toolbar para ver cupones y opciones de pago';
+          }
+          if (payBtn) {
+            payBtn.textContent = '✓ Listo';
+            payBtn.disabled = true;
+          }
+        }
+      );
+    });
+
+    banner.querySelector('#kueski-close-btn')?.addEventListener('click', () => {
+      banner.classList.add('kueski-banner-hiding');
+      rememberBannerDismissed(currentDomain);
+      setTimeout(() => banner.remove(), 320);
+    });
+  }
+
+  function createBannerElement(merchant) {
+    const banner = document.createElement('div');
+    banner.id = 'kueski-banner';
+    banner.setAttribute('role', 'region');
+    banner.setAttribute('aria-label', 'Kueski Pay');
+    banner.innerHTML = `
+      <div class="kueski-banner-content">
+        <img class="kueski-banner-logo-img" src="${chrome.runtime.getURL('assets/kueski-logo.webp')}" alt="Kueski">
+        <div class="kueski-banner-text">
+          <strong>Paga con Kueski Pay en ${merchant.name}</strong>
+          <span>Compra ahora y paga en quincenas, sin tarjeta de crédito</span>
+        </div>
+        <button class="kueski-banner-btn" id="kueski-pay-btn" type="button">Pagar con Kueski Pay</button>
+        <button class="kueski-banner-close" id="kueski-close-btn" type="button" aria-label="Cerrar">✕</button>
+      </div>
+    `;
+    return banner;
+  }
+
+  function mountKueskiBanner(merchant) {
+    const anchor = findHeaderAnchor();
+    if (!document.body) return false;
+
+    let banner = document.getElementById('kueski-banner');
+    if (!banner) {
+      banner = createBannerElement(merchant);
+      wireBannerEvents(banner, merchant);
+    }
+
+    if (anchor) {
+      if (banner.previousElementSibling !== anchor) {
+        anchor.insertAdjacentElement('afterend', banner);
+      }
+      watchBannerLayout(banner, anchor);
+      return true;
+    }
+
+    if (banner.parentElement !== document.body || banner !== document.body.firstElementChild) {
+      document.body.insertBefore(banner, document.body.firstChild);
+    }
+    applyBannerLayout(banner, null);
+    return false;
+  }
+
+  function initKueskiBanner(merchant) {
+    const ensureMounted = () => {
+      const hadAnchor = mountKueskiBanner(merchant);
+      if (!document.getElementById('kueski-banner')) {
+        mountKueskiBanner(merchant);
+      }
+      return hadAnchor;
+    };
+
+    if (ensureMounted()) return;
+
+    const observer = new MutationObserver(() => {
+      if (ensureMounted()) {
+        observer.disconnect();
+      }
+    });
+
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+    window.addEventListener('load', ensureMounted, { once: true });
+    setTimeout(() => observer.disconnect(), 15000);
+  }
+
   chrome.runtime.sendMessage(
     { type: 'CHECK_MERCHANT', domain: currentDomain },
-    (response) => {
-      if (response && response.affiliated) {
-        scanAndPublishProduct();
-        showKueskiBanner(response.merchant);
-        chrome.runtime.sendMessage({
-          type: 'LOG_ACTIVITY',
-          domain: currentDomain,
-          action: 'viewed_payment_promo',
-          details: `Banner mostrado para ${response.merchant.name}`,
-        });
-      }
+    async (response) => {
+      if (!response?.affiliated) return;
+
+      const dismissed = await isBannerDismissed(currentDomain);
+      if (dismissed) return;
+
+      scanAndPublishProduct();
+      initKueskiBanner(response.merchant);
+      chrome.runtime.sendMessage({
+        type: 'LOG_ACTIVITY',
+        domain: currentDomain,
+        action: 'viewed_payment_promo',
+        details: `Banner insertado para ${response.merchant.name}`,
+      });
     }
   );
 
@@ -170,59 +397,5 @@
     }
     return false;
   });
-
-  function showKueskiBanner(merchant) {
-    if (document.getElementById('kueski-banner')) return;
-
-    const banner = document.createElement('div');
-    banner.id = 'kueski-banner';
-    banner.innerHTML = `
-      <div class="kueski-banner-content">
-        <img src="${chrome.runtime.getURL('assets/kueski-logo.webp')}" style="width:24px;height:24px;object-fit:contain;border-radius:4px" alt="Kueski">
-        <div class="kueski-banner-text">
-          <strong>¡Puedes pagar con Kueski Pay en ${merchant.name}!</strong>
-          <span>Compra ahora y paga en quincenas, sin tarjeta de crédito</span>
-        </div>
-        <button class="kueski-banner-btn" id="kueski-pay-btn">Pagar con Kueski Pay</button>
-        <button class="kueski-banner-close" id="kueski-close-btn">✕</button>
-      </div>
-    `;
-
-    document.body.appendChild(banner);
-
-    requestAnimationFrame(() => {
-      banner.classList.add('kueski-banner-show');
-    });
-
-    document.getElementById('kueski-pay-btn').addEventListener('click', () => {
-      const product = scanAndPublishProduct();
-
-      chrome.runtime.sendMessage(
-        { type: 'OPEN_POPUP', domain: currentDomain, product },
-        (response) => {
-          if (response && response.ok) {
-            return;
-          }
-
-          chrome.runtime.sendMessage({ type: 'HIGHLIGHT_ICON' });
-          chrome.runtime.sendMessage({
-            type: 'LOG_ACTIVITY',
-            domain: currentDomain,
-            action: 'opened_widget',
-            details: `Pago iniciado en ${merchant.name}`,
-          });
-
-          document.querySelector('.kueski-banner-text span').textContent =
-            'Abre la extensión de Kueski en tu toolbar para ver cupones y opciones de pago';
-          document.getElementById('kueski-pay-btn').textContent = '✓ Listo';
-          document.getElementById('kueski-pay-btn').disabled = true;
-        }
-      );
-    });
-
-    document.getElementById('kueski-close-btn').addEventListener('click', () => {
-      banner.classList.remove('kueski-banner-show');
-      setTimeout(() => banner.remove(), 300);
-    });
-  }
 })();
+
