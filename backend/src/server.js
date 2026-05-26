@@ -2,6 +2,13 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const db = require('./db');
+const {
+  DEMO_EMAILS,
+  ensureDemoUsers,
+  enrichAccountResponse,
+  countOverdueInstallments,
+  assertFeatureAllowed,
+} = require('./demoProfiles');
 
 const DEMO_CREDIT_LIMIT = 45000;
 
@@ -113,6 +120,12 @@ app.post('/api/prestamo-demo', async (req, res) => {
   const parsedAmount = Number(amount);
   if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
     return res.status(400).json({ ok: false, error: 'amount debe ser un número válido mayor a 0' });
+  }
+
+  try {
+    await assertFeatureAllowed(db, email, 'kueski_cash');
+  } catch (error) {
+    return res.status(error.statusCode || 403).json({ ok: false, error: error.message });
   }
 
   let client;
@@ -374,6 +387,12 @@ app.post('/api/transferencias', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'Destinatario inválido' });
   }
 
+  try {
+    await assertFeatureAllowed(db, from_email, 'transfers');
+  } catch (error) {
+    return res.status(error.statusCode || 403).json({ ok: false, error: error.message });
+  }
+
   let client;
   try {
     client = await db.pool.connect();
@@ -488,6 +507,10 @@ app.get('/api/cuenta', async (req, res) => {
     `, [email]);
     if (cuenta.rows.length === 0)
       return res.status(404).json({ ok: false, error: 'Usuario no encontrado' });
+
+    const overdueCount = await countOverdueInstallments(db, email);
+    const cuentaData = enrichAccountResponse(cuenta.rows[0], overdueCount);
+
     const txs = await db.query(`
       SELECT * FROM (
         SELECT t.id, t.total_amount, t.original_amount, t.discount_amount,
@@ -557,7 +580,7 @@ app.get('/api/cuenta', async (req, res) => {
       ORDER BY created_at DESC
       LIMIT 10
     `, [email]);
-    res.json({ ok: true, cuenta: cuenta.rows[0], ultimas_transacciones: txs.rows });
+    res.json({ ok: true, cuenta: cuentaData, ultimas_transacciones: txs.rows });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
@@ -568,6 +591,12 @@ app.post('/api/transacciones', async (req, res) => {
   const { email, plan_id, monto, domain, coupon_code } = req.body;
   if (!email || !plan_id || !monto)
     return res.status(400).json({ ok: false, error: 'email, plan_id y monto son requeridos' });
+
+  try {
+    await assertFeatureAllowed(db, email, 'purchases');
+  } catch (error) {
+    return res.status(error.statusCode || 403).json({ ok: false, error: error.message });
+  }
 
   let client;
   try {
@@ -763,12 +792,17 @@ async function ensureTransferSchema() {
     );
   `);
 
-  // Prototype: assign fixed demo limit to accounts created before this feature
+  await ensureDemoUsers(db);
+
+  const demoEmailList = [...DEMO_EMAILS].map((email) => email.toLowerCase());
   await db.query(`
-    UPDATE kueski_accounts
+    UPDATE kueski_accounts ka
     SET credit_limit = $1, updated_at = NOW()
-    WHERE credit_limit = 0
-  `, [DEMO_CREDIT_LIMIT]);
+    FROM users u
+    WHERE ka.user_id = u.id
+      AND ka.credit_limit = 0
+      AND LOWER(u.email) <> ALL($2::text[])
+  `, [DEMO_CREDIT_LIMIT, demoEmailList]);
 
   // Mark legacy Kueski Cash top-ups that were saved as purchases
   await db.query(`

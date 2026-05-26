@@ -37,6 +37,7 @@
           <button class="btn-primary" data-action="navigate" data-view="home">INICIAR SESIÓN</button>
         </div>
         <p class="login-footer">¿Nuevo en Kueski? <a href="#" data-action="navigate" data-view="register">Regístrate</a></p>
+        <p class="login-demo-hint">Demo: <strong>bueno@demo.com</strong> · <strong>regular@demo.com</strong> · <strong>limitado@demo.com</strong></p>
       </div>
     </div>
 
@@ -128,7 +129,7 @@
         <!-- ===== HOME TAB ===== -->
         <div id="tab-home" class="tab active">
           <!-- Hero Discount Card -->
-          <div class="discount-card" data-action="coupon-detail" data-code="KUESKI20" data-amount="20% de descuento" data-desc="Oferta exclusiva en tu próxima compra en tiendas afiliadas." data-expiry="31 de Dic 2026">
+          <div class="discount-card" data-action="coupon-detail" data-feature="purchases" data-code="KUESKI20" data-amount="20% de descuento" data-desc="Oferta exclusiva en tu próxima compra en tiendas afiliadas." data-expiry="31 de Dic 2026">
             <span class="discount-badge">OFERTA LIMITADA</span>
             <h2 class="discount-amount">20% Descuento</h2>
             <p class="discount-desc">Oferta exclusiva en tu próxima compra en tiendas afiliadas.</p>
@@ -143,7 +144,7 @@
           <div class="balance-card">
             <p class="balance-label">Saldo disponible</p>
             <h3 class="balance-amount">$4,850.00</h3>
-            <p class="balance-status"><span class="material-symbols-outlined tiny">check_circle</span> Cuenta activa</p>
+            <p class="balance-status" id="balance-status"><span class="material-symbols-outlined tiny">check_circle</span> Cuenta activa</p>
           </div>
 
           <div class="credit-card">
@@ -154,7 +155,7 @@
                 </div>
                 <div>
                   <p class="credit-title">Uso de crédito</p>
-                  <p class="credit-sub">Salud buena</p>
+                  <p class="credit-sub" id="credit-health-label">Salud buena</p>
                 </div>
               </div>
               <span class="credit-pct">64%</span>
@@ -173,28 +174,28 @@
           </div>
 
           <div class="coupons-scroll">
-            <div class="coupon-mini" data-action="coupon-detail" data-code="AMAZON15" data-amount="15% off" data-desc="Válido en Amazon México en compras mayores a $500." data-expiry="15 de Jun 2026">
+            <div class="coupon-mini" data-action="coupon-detail" data-feature="purchases" data-code="AMAZON15" data-amount="15% off" data-desc="Válido en Amazon México en compras mayores a $500." data-expiry="15 de Jun 2026">
               <div class="coupon-mini-icon">🛒</div>
               <div class="coupon-mini-info">
                 <strong>Amazon</strong>
                 <span>15% off</span>
               </div>
             </div>
-            <div class="coupon-mini" data-action="coupon-detail" data-code="PRIVALIA10" data-amount="10% off" data-desc="Descuento en toda la tienda Privalia." data-expiry="30 de Jun 2026">
+            <div class="coupon-mini" data-action="coupon-detail" data-feature="purchases" data-code="PRIVALIA10" data-amount="10% off" data-desc="Descuento en toda la tienda Privalia." data-expiry="30 de Jun 2026">
               <div class="coupon-mini-icon">👗</div>
               <div class="coupon-mini-info">
                 <strong>Privalia</strong>
                 <span>10% off</span>
               </div>
             </div>
-            <div class="coupon-mini" data-action="coupon-detail" data-code="LIVERPOOL500" data-amount="$500 off" data-desc="Cupón de $500 en compras mayores a $3,000." data-expiry="31 de Jul 2026">
+            <div class="coupon-mini" data-action="coupon-detail" data-feature="purchases" data-code="LIVERPOOL500" data-amount="$500 off" data-desc="Cupón de $500 en compras mayores a $3,000." data-expiry="31 de Jul 2026">
               <div class="coupon-mini-icon">🏬</div>
               <div class="coupon-mini-info">
                 <strong>Liverpool</strong>
                 <span>$500 off</span>
               </div>
             </div>
-            <div class="coupon-mini" data-action="coupon-detail" data-code="NIKE20" data-amount="20% off" data-desc="Descuento exclusivo en Nike con Kueski Pay." data-expiry="31 de Dic 2026">
+            <div class="coupon-mini" data-action="coupon-detail" data-feature="purchases" data-code="NIKE20" data-amount="20% off" data-desc="Descuento exclusivo en Nike con Kueski Pay." data-expiry="31 de Dic 2026">
               <div class="coupon-mini-icon">👟</div>
               <div class="coupon-mini-info">
                 <strong>Nike</strong>
@@ -405,7 +406,7 @@
             <div class="avatar">ML</div>
             <div class="profile-info">
               <h3>Mariana López</h3>
-              <span class="member-badge">Miembro Premium</span>
+              <span class="member-badge" id="member-badge">Miembro Premium</span>
             </div>
           </div>
 
@@ -419,8 +420,12 @@
             <div class="progress-bar"><div class="progress-fill" style="width:35%"></div></div>
           </div>
 
+          <div id="account-restricted-banner" class="account-restricted-banner hidden">
+            Tu cuenta tiene pagos vencidos o crédito limitado. Algunas funciones están bloqueadas hasta regularizar tu saldo.
+          </div>
+
           <div class="account-actions">
-            <button class="btn-secondary btn-transfer" data-action="open-transfer" type="button">
+            <button class="btn-secondary btn-transfer" data-action="open-transfer" data-feature="transfers" type="button">
               <span class="material-symbols-outlined tiny">swap_horiz</span> Transferir
             </button>
           </div>
@@ -430,7 +435,7 @@
               <span class="credit-limit-label">LÍMITE TOTAL</span>
               <strong class="credit-limit-val">$45,000.00</strong>
             </div>
-            <button class="btn-secondary" data-action="demo-loan" type="button">Kueski Cash</button>
+            <button class="btn-secondary" data-action="demo-loan" data-feature="kueski_cash" type="button">Kueski Cash</button>
           </div>
 
           <div class="section-header">

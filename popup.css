@@ -489,6 +489,74 @@ body {
   gap: 4px;
 }
 
+.balance-status-active {
+  color: var(--green-dark);
+}
+
+.balance-status-warning {
+  color: #c62828;
+}
+
+.credit-card.credit-health-good .credit-pct {
+  color: var(--green-dark);
+}
+
+.credit-card.credit-health-regular .credit-pct {
+  color: #e65100;
+}
+
+.credit-card.credit-health-limited .credit-pct {
+  color: #c62828;
+}
+
+.progress-fill-good {
+  background: var(--green-dark);
+}
+
+.progress-fill-regular {
+  background: #fb8c00;
+}
+
+.progress-fill-limited {
+  background: #c62828;
+}
+
+.feature-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+button.feature-disabled {
+  pointer-events: none;
+}
+
+.account-restricted-banner {
+  margin: 12px 0 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #ffebee;
+  color: #b71c1c;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.account-restricted-banner.hidden {
+  display: none;
+}
+
+.login-demo-hint {
+  margin-top: 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--on-surface-variant);
+  text-align: center;
+}
+
+.login-demo-hint strong {
+  color: var(--primary);
+  font-weight: 700;
+}
+
 .credit-card {
   background: var(--surface-container-low);
   padding: 18px;
