@@ -15,12 +15,6 @@ const STORE_META = {
   'shein.com': { icon: '👚', slug: 'shein', category: 'Moda' },
 };
 
-const TIER_HERO_DISCOUNT = {
-  good: { pct: '25%', code: 'KUESKI25' },
-  regular: { pct: '12%', code: 'KUESKI12' },
-  limited: { pct: '5%', code: 'KUESKI5' },
-};
-
 function parseDiscountFromLabel(discountLabel, amount) {
   const pct = String(discountLabel).match(/(\d+(?:\.\d+)?)\s*%/);
   const fixed = String(discountLabel).match(/\$\s*([\d,]+(?:\.\d+)?)/);
@@ -30,21 +24,20 @@ function parseDiscountFromLabel(discountLabel, amount) {
   return Math.min(discount, amount);
 }
 
-function applyHeroTierDiscount(tier) {
+function setSitePromoVisible(show) {
   const card = document.querySelector('.discount-card');
-  const heroAmount = document.querySelector('.discount-card .discount-amount');
-  const heroDesc = document.querySelector('.discount-card .discount-desc');
-  if (!card || !heroAmount || card.dataset.siteCoupon === 'true') return;
+  if (card) card.classList.toggle('hidden', !show);
+}
 
-  const hero = TIER_HERO_DISCOUNT[tier] || TIER_HERO_DISCOUNT.good;
-  heroAmount.textContent = `${hero.pct} Descuento`;
-  if (heroDesc) {
-    heroDesc.textContent = 'Oferta exclusiva en tu próxima compra en tiendas afiliadas.';
+function isCheckoutPageUrl(url) {
+  if (!url) return false;
+  try {
+    const { protocol, hostname } = new URL(url);
+    if (protocol !== 'http:' && protocol !== 'https:') return false;
+    return Boolean(hostname);
+  } catch (_err) {
+    return false;
   }
-  card.dataset.code = hero.code;
-  card.dataset.amount = `${hero.pct} de descuento`;
-  card.dataset.desc = 'Oferta exclusiva en tu próxima compra en tiendas afiliadas.';
-  card.dataset.expiry = '31 de Dic 2026';
 }
 
 function renderCouponMini(store) {
@@ -96,8 +89,6 @@ async function loadTierStoreOffers() {
     const res = await fetch(`http://localhost:3000/api/cupones/tiendas${emailParam}`);
     const data = await res.json();
     if (!data.ok || !Array.isArray(data.tiendas)) return;
-
-    applyHeroTierDiscount(data.credit_tier || 'good');
 
     const featured = data.tiendas.slice(0, 4);
     couponsScroll.innerHTML = featured.map(renderCouponMini).join('');
@@ -572,36 +563,33 @@ async function loadCurrentSiteCoupon() {
   if (card) card.dataset.siteCoupon = 'false';
 
   try {
-    // Get the active tab's URL
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.url) {
-      if (currentAccountProfile?.credit_tier) applyHeroTierDiscount(currentAccountProfile.credit_tier);
+    if (!isCheckoutPageUrl(tab?.url)) {
+      setSitePromoVisible(false);
       return;
     }
 
-    const domain = new URL(tab.url).hostname.replace('www.', '');
+    const domain = new URL(tab.url).hostname.replace(/^www\./i, '');
     const emailParam = currentUserEmail
       ? `&email=${encodeURIComponent(currentUserEmail)}`
       : '';
 
-    // Check if this merchant has a coupon in the DB
     const res = await fetch(`http://localhost:3000/api/merchants/check?domain=${domain}${emailParam}`);
     const data = await res.json();
 
     if (!data.affiliated) {
-      if (currentAccountProfile?.credit_tier) applyHeroTierDiscount(currentAccountProfile.credit_tier);
+      setSitePromoVisible(false);
       return;
     }
 
     const { merchant, coupon: code, discount } = data.merchant;
 
-    // Update the hero card with real data
+    setSitePromoVisible(true);
     if (card) card.dataset.siteCoupon = 'true';
     document.querySelector('.discount-card .discount-amount').textContent = discount;
     document.querySelector('.discount-card .discount-desc').textContent =
       `Oferta exclusiva en ${data.merchant.name} con Kueski Pay.`;
 
-    // Make "Aplicar ahora" open the coupon detail for this store
     card.dataset.code = code;
     card.dataset.amount = discount;
     card.dataset.desc = `Válido en ${data.merchant.name}.`;
@@ -611,7 +599,7 @@ async function loadCurrentSiteCoupon() {
 
   } catch (err) {
     console.error('Error loading site coupon:', err);
-    if (currentAccountProfile?.credit_tier) applyHeroTierDiscount(currentAccountProfile.credit_tier);
+    setSitePromoVisible(false);
   }
 }
 

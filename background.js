@@ -27,8 +27,16 @@ async function checkMerchantFromApi(domain) {
   return response.json();
 }
 
+function hostnameMatchesMerchant(hostname, merchantDomain) {
+  const host = String(hostname || '').replace(/^www\./i, '').toLowerCase();
+  const merchant = String(merchantDomain || '').toLowerCase();
+  if (!host || !merchant) return false;
+  return host === merchant || host.endsWith(`.${merchant}`);
+}
+
 function checkMerchantFallback(domain) {
-  const merchant = AFFILIATED_MERCHANTS.find(m => domain.includes(m.domain));
+  const host = String(domain || '').replace(/^www\./i, '').toLowerCase();
+  const merchant = AFFILIATED_MERCHANTS.find((m) => hostnameMatchesMerchant(host, m.domain));
 
   if (!merchant) {
     return { affiliated: false };

@@ -391,6 +391,9 @@ body {
 }
 
 /* ===== HOME TAB ===== */
+.discount-card.hidden {
+  display: none;
+}
 .discount-card {
   background: linear-gradient(135deg, var(--green), var(--green-dark));
   padding: 24px;

@@ -15,6 +15,23 @@ const {
 
 const DEMO_CREDIT_LIMIT = 20000;
 
+function hostnameMatchesMerchant(hostname, merchantDomain) {
+  const host = String(hostname || '').replace(/^www\./i, '').toLowerCase();
+  const merchant = String(merchantDomain || '').toLowerCase();
+  if (!host || !merchant) return false;
+  return host === merchant || host.endsWith(`.${merchant}`);
+}
+
+async function findAffiliatedMerchant(hostname) {
+  const host = String(hostname || '').replace(/^www\./i, '').toLowerCase();
+  const result = await db.query(`
+    SELECT id, name, domain
+    FROM merchants
+    WHERE active = TRUE
+  `);
+  return result.rows.find((merchant) => hostnameMatchesMerchant(host, merchant.domain)) || null;
+}
+
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 
@@ -40,17 +57,8 @@ app.get('/api/merchants/check', async (req, res) => {
     }
 
     const tier = await resolveCreditTier(db, email);
-
-    const merchantSql = `
-      SELECT id, name, domain
-      FROM merchants
-      WHERE active = TRUE
-      AND $1 LIKE '%' || domain || '%'
-      LIMIT 1;
-    `;
-
-    const merchantResult = await db.query(merchantSql, [domain]);
-    const merchant = merchantResult.rows[0];
+    const host = domain.replace(/^www\./i, '');
+    const merchant = await findAffiliatedMerchant(host);
 
     if (!merchant) {
       return res.json({ affiliated: false });
@@ -101,12 +109,9 @@ app.post('/api/activity', async (req, res) => {
       return res.status(400).json({ ok: false, message: 'domain and action are required' });
     }
 
-    const merchantResult = await db.query(
-      "SELECT id FROM merchants WHERE $1 LIKE '%' || domain || '%' LIMIT 1",
-      [String(domain).toLowerCase()]
-    );
-
-    const merchantId = merchantResult.rows[0]?.id || null;
+    const host = String(domain || '').replace(/^www\./i, '').toLowerCase();
+    const merchant = await findAffiliatedMerchant(host);
+    const merchantId = merchant?.id || null;
 
     await db.query(
       'INSERT INTO user_activity (merchant_id, action, details) VALUES ($1, $2, $3)',
