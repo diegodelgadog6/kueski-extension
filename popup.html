@@ -136,6 +136,16 @@
             <div class="discount-cta">Pagar con Kueski Pay <span class="material-symbols-outlined">arrow_forward</span></div>
           </div>
 
+          <div id="home-product-context" class="home-product-context hidden">
+            <p class="home-product-label">PRODUCTO DETECTADO</p>
+            <h3 id="home-product-name" class="home-product-name">Producto</h3>
+            <p id="home-product-price" class="home-product-summary">$0.00</p>
+            <p id="home-product-promo" class="home-product-promo"></p>
+            <button class="btn-primary home-product-pay-btn" data-action="open-checkout-from-product" data-feature="purchases" type="button">
+              Pagar con Kueski Pay
+            </button>
+          </div>
+
           <div id="site-promo-hint" class="site-promo-hint hidden">
             <span class="material-symbols-outlined site-promo-hint-icon">storefront</span>
             <div class="site-promo-hint-copy">
@@ -934,9 +944,18 @@
         <div id="checkout-step-1">
           <p style="font-size:13px;color:#666;margin-bottom:4px">COMPRANDO EN</p>
           <p id="checkout-merchant" style="font-weight:700;font-size:16px;margin-bottom:16px">Amazon México</p>
-          <div class="form-group">
+
+          <div id="checkout-product-detected" class="checkout-product-card hidden">
+            <p class="checkout-product-label">PRODUCTO DETECTADO</p>
+            <h3 id="checkout-product-name" class="checkout-product-name">Producto</h3>
+            <p id="checkout-product-price" class="checkout-product-price">$0.00</p>
+            <p id="checkout-product-promo" class="checkout-product-promo"></p>
+          </div>
+
+          <div id="checkout-manual-amount" class="form-group">
             <label>MONTO DE COMPRA</label>
             <input type="number" id="checkout-amount" placeholder="$0.00" min="1">
+            <p class="checkout-manual-hint">No detectamos el producto en esta página. Ingresa el monto manualmente.</p>
           </div>
           <div id="checkout-coupon-info" style="background:#f0faf5;border-radius:10px;padding:12px;margin:12px 0;display:none">
             <p style="font-size:12px;color:#0a7a4b;margin:0">🎉 Cupón aplicado: <strong id="checkout-coupon-code"></strong></p>

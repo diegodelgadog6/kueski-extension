@@ -62,6 +62,127 @@ async function resolveActivePageDomain() {
   return stored.activeMerchantDomain?.replace(/^www\./i, '') || null;
 }
 
+async function resolveActiveProduct() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id && isCheckoutPageUrl(tab.url)) {
+      const response = await chrome.tabs.sendMessage(tab.id, { type: 'GET_PRODUCT_CONTEXT' });
+      if (response?.product?.name && response?.product?.price) {
+        await chrome.storage.session.set({ activeProduct: response.product });
+        return response.product;
+      }
+    }
+  } catch (_err) {
+    // Content script may be unavailable on some pages.
+  }
+
+  const stored = await chrome.storage.session.get(['activeProduct']);
+  return stored.activeProduct?.name && stored.activeProduct?.price
+    ? stored.activeProduct
+    : null;
+}
+
+async function buildProductPromoHint(amount, domain, merchantData) {
+  if (!amount || !domain) return '';
+
+  try {
+    let couponCode = merchantData?.coupon;
+    let discountLabel = merchantData?.discount;
+
+    if (!couponCode) {
+      const emailParam = currentUserEmail
+        ? `&email=${encodeURIComponent(currentUserEmail)}`
+        : '';
+      const merchRes = await fetch(
+        `http://localhost:3000/api/merchants/check?domain=${domain}${emailParam}`
+      );
+      const merchInfo = await merchRes.json();
+      if (!merchInfo.affiliated) return '';
+      couponCode = merchInfo.merchant.coupon;
+      discountLabel = merchInfo.merchant.discount;
+    }
+
+    if (!couponCode) {
+      return discountLabel ? `Oferta disponible: ${discountLabel}` : '';
+    }
+
+    const emailParam = currentUserEmail
+      ? `&email=${encodeURIComponent(currentUserEmail)}`
+      : '';
+    const couponRes = await fetch(
+      `http://localhost:3000/api/cupones/check?codigo=${couponCode}&domain=${domain}${emailParam}`
+    );
+    const couponData = await couponRes.json();
+
+    if (couponData.valido) {
+      const savings = parseDiscountFromLabel(couponData.cupon.discount, amount);
+      if (savings > 0) {
+        return `🎉 Cupón ${couponCode} — Ahorra ${formatBalanceAmount(savings)}`;
+      }
+      return `🎉 Cupón ${couponCode} — ${discountLabel || couponData.cupon.discount}`;
+    }
+
+    return discountLabel ? `Oferta disponible: ${discountLabel}` : '';
+  } catch (_err) {
+    return '';
+  }
+}
+
+function applyCheckoutProductUI(product, merchantData) {
+  const detectedCard = document.getElementById('checkout-product-detected');
+  const manualBlock = document.getElementById('checkout-manual-amount');
+  const amountInput = document.getElementById('checkout-amount');
+  const couponInfo = document.getElementById('checkout-coupon-info');
+
+  if (product?.name && product?.price) {
+    detectedCard?.classList.remove('hidden');
+    manualBlock?.classList.add('hidden');
+    if (couponInfo) couponInfo.style.display = 'none';
+    document.getElementById('checkout-product-name').textContent = product.name;
+    document.getElementById('checkout-product-price').textContent = formatBalanceAmount(product.price);
+    if (amountInput) amountInput.value = product.price;
+    buildProductPromoHint(product.price, checkoutState.domain, merchantData).then((promo) => {
+      const promoEl = document.getElementById('checkout-product-promo');
+      if (promoEl) promoEl.textContent = promo;
+    });
+  } else {
+    detectedCard?.classList.add('hidden');
+    manualBlock?.classList.remove('hidden');
+    if (amountInput) amountInput.value = '';
+    const promoEl = document.getElementById('checkout-product-promo');
+    if (promoEl) promoEl.textContent = '';
+    if (couponInfo && merchantData?.coupon) couponInfo.style.display = 'block';
+  }
+}
+
+async function loadProductContext(isAffiliated = true) {
+  const card = document.getElementById('home-product-context');
+  const discountCard = document.querySelector('.discount-card');
+  if (!card) return;
+
+  if (!isAffiliated) {
+    card.classList.add('hidden');
+    return;
+  }
+
+  const product = await resolveActiveProduct();
+  if (!product) {
+    card.classList.add('hidden');
+    if (discountCard) discountCard.classList.remove('hidden');
+    return;
+  }
+
+  if (discountCard) discountCard.classList.add('hidden');
+
+  const domain = await resolveActivePageDomain();
+  const promo = await buildProductPromoHint(product.price, domain);
+  document.getElementById('home-product-name').textContent = product.name;
+  document.getElementById('home-product-price').textContent = formatBalanceAmount(product.price);
+  const promoEl = document.getElementById('home-product-promo');
+  if (promoEl) promoEl.textContent = promo;
+  card.classList.remove('hidden');
+}
+
 function renderCouponMini(store) {
   const meta = STORE_META[store.domain] || { icon: '🏪' };
   const expiry = store.expires_at
@@ -501,7 +622,7 @@ function getActivityIcon(tx) {
 
 function getActivityTypeLabel(tx) {
   if (tx.status === 'transfer_sent' || tx.status === 'transfer_received') return 'Transferencia';
-  if (getActivityKind(tx) === 'loan') return 'Acreditación';
+  if (getActivityKind(tx) === 'loan') return 'Préstamo personal';
   return 'Crédito';
 }
 
@@ -705,7 +826,8 @@ async function showTransactionDetail(row) {
     document.getElementById('txd-amount').textContent = d.amount || '$0.00';
     document.getElementById('txd-installments').textContent = d.installments || '—';
     document.getElementById('txd-installment-amount').textContent = d.installmentAmount || '$0.00';
-    document.getElementById('txd-method').textContent = d.method || 'Kueski Pay - Crédito';
+    document.getElementById('txd-method').textContent =
+      kind === 'loan' ? 'Kueski Cash' : (d.method || 'Kueski Pay - Crédito');
     document.getElementById('txd-purchase-details').classList.remove('hidden');
     await loadInstallmentTimeline(currentTransactionId);
   } else if (kind === 'transfer') {
@@ -807,7 +929,7 @@ async function loadActivityData() {
         data-to-email="${escapeHtmlAttr(tx.transfer_to_email || '')}">
         <div class="tx-icon">${getActivityIcon(tx)}</div>
         <div class="tx-info">
-          <strong>${tx.merchant || "Kueski Pay"}</strong>
+          <strong>${heroTitle}</strong>
           <span>${formattedDate} • ${getActivityTypeLabel(tx)}</span>
         </div>
         <div class="tx-amount">
@@ -870,6 +992,7 @@ async function loadCurrentSiteCoupon() {
     const domain = await resolveActivePageDomain();
     if (!domain) {
       setSitePromoState('unaffiliated');
+      await loadProductContext(false);
       return;
     }
 
@@ -882,12 +1005,14 @@ async function loadCurrentSiteCoupon() {
 
     if (!data.affiliated) {
       setSitePromoState('unaffiliated');
+      await loadProductContext(false);
       return;
     }
 
     const { merchant, coupon: code, discount } = data.merchant;
 
     setSitePromoState('affiliated');
+    await loadProductContext(true);
     if (card) card.dataset.siteCoupon = 'true';
     document.querySelector('.discount-card .discount-amount').textContent = discount;
     document.querySelector('.discount-card .discount-desc').textContent =
@@ -903,6 +1028,7 @@ async function loadCurrentSiteCoupon() {
   } catch (err) {
     console.error('Error loading site coupon:', err);
     setSitePromoState('unaffiliated');
+    await loadProductContext(false);
   }
 }
 
@@ -1120,7 +1246,11 @@ async function payInstallment(installmentId) {
     }
 
     if (data.pago?.transaction_completed) {
-      alert(`¡Compra en ${data.pago.merchant} liquidada por completo!`);
+      if (data.pago.is_loan) {
+        alert('¡Préstamo de Kueski Cash liquidado por completo!');
+      } else {
+        alert(`¡Compra en ${data.pago.merchant} liquidada por completo!`);
+      }
     }
   } catch (err) {
     console.error('Error paying installment:', err);
@@ -1675,6 +1805,10 @@ document.addEventListener("DOMContentLoaded", () => {
         confirmDeleteAccount();
         break;
 
+      case 'open-checkout-from-product':
+        openCheckout();
+        break;
+
       // Hide checkout overlay and refresh balance
       case 'close-checkout':
         document.getElementById('checkout-overlay').classList.add('hidden');
@@ -1795,7 +1929,14 @@ async function registerUser(name, email) {
 }
 
 // Tracks current checkout session data
-let checkoutState = { domain: '', merchantName: '', couponCode: '', planId: null };
+let checkoutState = {
+  domain: '',
+  merchantName: '',
+  couponCode: '',
+  planId: null,
+  productName: null,
+  productPrice: null,
+};
 
 //  Open Kueski Pay Checkout Step 1
 async function openCheckout() {
@@ -1814,21 +1955,25 @@ async function openCheckout() {
 
     if (!data.affiliated) return;
 
+    const product = await resolveActiveProduct();
+
     // Save for use when confirming transaction
     checkoutState.domain = domain;
     checkoutState.merchantName = data.merchant.name;
     checkoutState.couponCode = data.merchant.coupon;
+    checkoutState.productName = product?.name || null;
+    checkoutState.productPrice = product?.price || null;
 
     document.getElementById('checkout-merchant').textContent = data.merchant.name;
-    document.getElementById('checkout-coupon-info').style.display = 'block';
     document.getElementById('checkout-coupon-code').textContent = data.merchant.coupon;
     document.getElementById('checkout-coupon-discount').textContent = data.merchant.discount;
+
+    applyCheckoutProductUI(product, data.merchant);
 
     // Reset to step 1 in case user opened it before
     document.getElementById('checkout-step-1').style.display = 'block';
     document.getElementById('checkout-step-2').style.display = 'none';
     document.getElementById('checkout-step-3').style.display = 'none';
-    document.getElementById('checkout-amount').value = '';
 
     document.getElementById('checkout-overlay').classList.remove('hidden');
   } catch (err) {
@@ -1938,8 +2083,11 @@ async function checkoutConfirm() {
 
     // Show success screen with payment summary
     const tx = data.transaccion;
+    const productLabel = checkoutState.productName
+      ? `${checkoutState.productName} — `
+      : '';
     document.getElementById('checkout-success-msg').textContent =
-      `$${parseFloat(tx.total_amount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} en ${tx.num_installments} quincenas de $${parseFloat(tx.amount_per_installment).toLocaleString('es-MX', { minimumFractionDigits: 2 })} cada una.`;
+      `${productLabel}$${parseFloat(tx.total_amount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} en ${tx.num_installments} quincenas de $${parseFloat(tx.amount_per_installment).toLocaleString('es-MX', { minimumFractionDigits: 2 })} cada una.`;
 
     document.getElementById('checkout-step-2').style.display = 'none';
     document.getElementById('checkout-step-3').style.display = 'block';

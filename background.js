@@ -107,12 +107,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (domain) {
           await chrome.storage.session.set({ activeMerchantDomain: domain });
         }
+        if (message.product?.name && message.product?.price) {
+          await chrome.storage.session.set({ activeProduct: message.product });
+        }
         if (typeof chrome.action.openPopup === 'function') {
           await chrome.action.openPopup();
           sendResponse({ ok: true });
         } else {
           sendResponse({ ok: false });
         }
+      } catch (_error) {
+        sendResponse({ ok: false });
+      }
+    })();
+  }
+
+  if (message.type === 'SET_PRODUCT_CONTEXT') {
+    (async () => {
+      try {
+        const domain = String(message.domain || '').replace(/^www\./i, '').toLowerCase();
+        const updates = {};
+        if (domain) updates.activeMerchantDomain = domain;
+        if (message.product?.name && message.product?.price) {
+          updates.activeProduct = message.product;
+        }
+        if (Object.keys(updates).length > 0) {
+          await chrome.storage.session.set(updates);
+        }
+        sendResponse({ ok: true });
       } catch (_error) {
         sendResponse({ ok: false });
       }

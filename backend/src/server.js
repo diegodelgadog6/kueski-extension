@@ -15,6 +15,14 @@ const {
 
 const DEMO_CREDIT_LIMIT = 20000;
 
+function sqlTransactionMerchant(tAlias = 't') {
+  return `CASE WHEN ${tAlias}.merchant_id IS NULL AND ${tAlias}.coupon_id IS NULL THEN 'Kueski Cash' ELSE COALESCE(m.name, 'Kueski Pay') END`;
+}
+
+function sqlIsLoanTransaction(tAlias = 't') {
+  return `(${tAlias}.merchant_id IS NULL AND ${tAlias}.coupon_id IS NULL)`;
+}
+
 function hostnameMatchesMerchant(hostname, merchantDomain) {
   const host = String(hostname || '').replace(/^www\./i, '').toLowerCase();
   const merchant = String(merchantDomain || '').toLowerCase();
@@ -476,7 +484,7 @@ app.get('/api/recordatorios', async (req, res) => {
         i.installment_no,
         t.id AS transaction_id,
         pp.num_installments,
-        COALESCE(m.name, 'Kueski Pay') AS merchant
+        ${sqlTransactionMerchant('t')} AS merchant
       FROM installments i
       JOIN transactions t ON t.id = i.transaction_id
       JOIN payment_plans pp ON pp.id = t.plan_id
@@ -557,7 +565,8 @@ app.post('/api/recordatorios/pagar', async (req, res) => {
         ka.id AS account_id,
         ka.available_balance,
         ka.used_balance,
-        COALESCE(m.name, 'Kueski Pay') AS merchant
+        ${sqlTransactionMerchant('t')} AS merchant,
+        ${sqlIsLoanTransaction('t')} AS is_loan
       FROM installments i
       JOIN transactions t ON t.id = i.transaction_id
       JOIN kueski_accounts ka ON ka.id = t.account_id
@@ -647,6 +656,7 @@ app.post('/api/recordatorios/pagar', async (req, res) => {
         installment_id: installment.id,
         amount: amount.toFixed(2),
         merchant: installment.merchant,
+        is_loan: installment.is_loan === true || installment.is_loan === 't',
         transaction_completed: allPaid,
       },
       cuenta: accountRes.rows[0],
@@ -873,35 +883,13 @@ app.get('/api/cuenta', async (req, res) => {
       SELECT * FROM (
         SELECT t.id, t.total_amount, t.original_amount, t.discount_amount,
                t.amount_per_installment, pp.num_installments, t.status, t.created_at,
-               CASE
-                 WHEN t.status = 'loaned'
-                   OR (
-                     t.merchant_id IS NULL
-                     AND t.coupon_id IS NULL
-                     AND NOT EXISTS (
-                       SELECT 1 FROM installments i WHERE i.transaction_id = t.id
-                     )
-                   )
-                 THEN 'Kueski Cash'
-                 ELSE COALESCE(m.name, 'Kueski Pay')
-               END AS merchant,
+               ${sqlTransactionMerchant('t')} AS merchant,
                CASE WHEN c.code IS NOT NULL THEN c.code || ' - ' || c.discount ELSE NULL END AS coupon_label,
                NULL::text AS transfer_from_name,
                NULL::text AS transfer_from_email,
                NULL::text AS transfer_to_name,
                NULL::text AS transfer_to_email,
-               CASE
-                 WHEN t.status = 'loaned'
-                   OR (
-                     t.merchant_id IS NULL
-                     AND t.coupon_id IS NULL
-                     AND NOT EXISTS (
-                       SELECT 1 FROM installments i WHERE i.transaction_id = t.id
-                     )
-                   )
-                 THEN TRUE
-                 ELSE FALSE
-               END AS is_loan,
+               ${sqlIsLoanTransaction('t')} AS is_loan,
                (SELECT i.id FROM installments i
                 WHERE i.transaction_id = t.id AND i.status = 'pending'
                 ORDER BY i.due_date ASC, i.installment_no ASC LIMIT 1) AS next_installment_id,
