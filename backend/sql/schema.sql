@@ -104,16 +104,16 @@ INSERT INTO coupons (merchant_id, code, discount, expires_at, active)
 SELECT m.id, seed.code, seed.discount, seed.expires_at, TRUE
 FROM (
   VALUES
-    ('amazon.com.mx', 'AMAZON15', '15% off', '2026-12-31'::DATE),
-    ('liverpool.com.mx', 'LIVERPOOL500', '$500 off', '2026-12-31'::DATE),
-    ('privalia.com.mx', 'PRIVALIA10', '10% off', '2026-12-31'::DATE),
-    ('nike.com', 'NIKE20', '20% off', '2026-12-31'::DATE),
-    ('zara.com', 'ZARA15', '15% off', '2026-12-31'::DATE),
+    ('amazon.com.mx', 'AMAZON15', '20% off', '2026-12-31'::DATE),
+    ('liverpool.com.mx', 'LIVERPOOL500', '$750 off', '2026-12-31'::DATE),
+    ('privalia.com.mx', 'PRIVALIA10', '15% off', '2026-12-31'::DATE),
+    ('nike.com', 'NIKE20', '25% off', '2026-12-31'::DATE),
+    ('zara.com', 'ZARA15', '18% off', '2026-12-31'::DATE),
     ('att.com.mx', 'ATT_MSI', 'MSI disponible', NULL),
-    ('officedepot.com.mx', 'OFFICE5', '5% cashback', '2026-12-31'::DATE),
-    ('puma.com', 'PUMA15', '15% off', '2026-12-31'::DATE),
-    ('adidas.com.mx', 'ADIDAS20', '20% off', '2026-12-31'::DATE),
-    ('shein.com', 'SHEIN25', '25% off', '2026-12-31'::DATE)
+    ('officedepot.com.mx', 'OFFICE5', '8% cashback', '2026-12-31'::DATE),
+    ('puma.com', 'PUMA15', '18% off', '2026-12-31'::DATE),
+    ('adidas.com.mx', 'ADIDAS20', '22% off', '2026-12-31'::DATE),
+    ('shein.com', 'SHEIN25', '30% off', '2026-12-31'::DATE)
 ) AS seed(domain, code, discount, expires_at)
 JOIN merchants m ON m.domain = seed.domain
 WHERE NOT EXISTS (

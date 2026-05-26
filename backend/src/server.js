@@ -8,6 +8,9 @@ const {
   enrichAccountResponse,
   countOverdueInstallments,
   assertFeatureAllowed,
+  scaleDiscountLabel,
+  parseDiscountAmount,
+  resolveCreditTier,
 } = require('./demoProfiles');
 
 const DEMO_CREDIT_LIMIT = 20000;
@@ -30,10 +33,13 @@ app.get('/health', async (_req, res) => {
 app.get('/api/merchants/check', async (req, res) => {
   try {
     const domain = String(req.query.domain || '').toLowerCase().trim();
+    const { email } = req.query;
 
     if (!domain) {
       return res.status(400).json({ affiliated: false, message: 'domain is required' });
     }
+
+    const tier = await resolveCreditTier(db, email);
 
     const merchantSql = `
       SELECT id, name, domain
@@ -67,14 +73,18 @@ app.get('/api/merchants/check', async (req, res) => {
       return res.json({ affiliated: false });
     }
 
+    const scaledDiscount = scaleDiscountLabel(coupon.discount, tier);
+
     return res.json({
       affiliated: true,
+      credit_tier: tier,
       merchant: {
         id: merchant.id,
         name: merchant.name,
         domain: merchant.domain,
         coupon: coupon.code,
-        discount: coupon.discount,
+        discount: scaledDiscount,
+        baseDiscount: coupon.discount,
         expiresAt: coupon.expires_at
       }
     });
@@ -206,11 +216,12 @@ app.get('/api/planes', async (_req, res) => {
 
 //  Validate a coupon code 
 app.get('/api/cupones/check', async (req, res) => {
-  const { codigo, domain } = req.query;
+  const { codigo, domain, email } = req.query;
   if (!codigo) return res.status(400).json({ ok: false, error: 'codigo requerido' });
   try {
+    const tier = await resolveCreditTier(db, email);
     const result = await db.query(`
-      SELECT c.*, m.name AS merchant_name
+      SELECT c.*, m.name AS merchant_name, m.domain AS merchant_domain
       FROM coupons c
       JOIN merchants m ON m.id = c.merchant_id
       WHERE UPPER(c.code) = UPPER($1)
@@ -220,7 +231,45 @@ app.get('/api/cupones/check', async (req, res) => {
     `, [codigo, domain || '']);
     if (result.rows.length === 0)
       return res.json({ ok: false, valido: false, mensaje: 'Cupón no válido o expirado' });
-    res.json({ ok: true, valido: true, cupon: result.rows[0] });
+    const cupon = {
+      ...result.rows[0],
+      discount: scaleDiscountLabel(result.rows[0].discount, tier),
+      base_discount: result.rows[0].discount,
+    };
+    res.json({ ok: true, valido: true, credit_tier: tier, cupon });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Store coupons scaled by credit tier
+app.get('/api/cupones/tiendas', async (req, res) => {
+  const { email } = req.query;
+  try {
+    const tier = await resolveCreditTier(db, email);
+    const result = await db.query(`
+      SELECT m.id, m.name, m.domain, c.code, c.discount, c.expires_at
+      FROM merchants m
+      JOIN coupons c ON c.merchant_id = m.id
+      WHERE m.active = TRUE
+        AND c.active = TRUE
+        AND (c.expires_at IS NULL OR c.expires_at >= CURRENT_DATE)
+      ORDER BY m.name
+    `);
+
+    res.json({
+      ok: true,
+      credit_tier: tier,
+      tiendas: result.rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        domain: row.domain,
+        code: row.code,
+        discount: scaleDiscountLabel(row.discount, tier),
+        base_discount: row.discount,
+        expires_at: row.expires_at,
+      })),
+    });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
@@ -626,6 +675,7 @@ app.post('/api/transacciones', async (req, res) => {
     const plan = planRes.rows[0];
     let discount = 0, coupon_id = null;
     if (coupon_code) {
+      const tier = await resolveCreditTier(db, email);
       const couponRes = await client.query(`
         SELECT c.* FROM coupons c JOIN merchants m ON m.id = c.merchant_id
         WHERE UPPER(c.code) = UPPER($1) AND c.active = TRUE
@@ -635,11 +685,8 @@ app.post('/api/transacciones', async (req, res) => {
       if (couponRes.rows.length > 0) {
         const coupon = couponRes.rows[0];
         coupon_id = coupon.id;
-        const pct = coupon.discount.match(/(\d+(\.\d+)?)\s*%/);
-        const fixed = coupon.discount.match(/\$\s*(\d+(\.\d+)?)/);
-        if (pct)   discount = parseFloat(monto) * (parseFloat(pct[1]) / 100);
-        if (fixed) discount = parseFloat(fixed[1]);
-        discount = Math.min(discount, parseFloat(monto));
+        const scaledDiscount = scaleDiscountLabel(coupon.discount, tier);
+        discount = parseDiscountAmount(scaledDiscount, monto);
       }
     }
     const base = parseFloat(monto) - discount;
@@ -793,6 +840,26 @@ async function ensureTransferSchema() {
   `);
 
   await ensureDemoUsers(db);
+
+  await db.query(`
+    UPDATE coupons c
+    SET discount = seed.discount
+    FROM merchants m,
+    (VALUES
+      ('amazon.com.mx', '20% off'),
+      ('liverpool.com.mx', '$750 off'),
+      ('privalia.com.mx', '15% off'),
+      ('nike.com', '25% off'),
+      ('zara.com', '18% off'),
+      ('att.com.mx', 'MSI disponible'),
+      ('officedepot.com.mx', '8% cashback'),
+      ('puma.com', '18% off'),
+      ('adidas.com.mx', '22% off'),
+      ('shein.com', '30% off')
+    ) AS seed(domain, discount)
+    WHERE c.merchant_id = m.id
+      AND m.domain = seed.domain
+  `);
 
   const demoEmailList = [...DEMO_EMAILS].map((email) => email.toLowerCase());
   await db.query(`

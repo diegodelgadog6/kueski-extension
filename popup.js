@@ -2,6 +2,111 @@
 let currentUserEmail = null;
 let currentAccountProfile = null;
 
+const STORE_META = {
+  'amazon.com.mx': { icon: '🛒', slug: 'amazon', category: 'Electrónica, Hogar' },
+  'liverpool.com.mx': { icon: '🏬', slug: 'liverpool', category: 'Moda, Hogar' },
+  'privalia.com.mx': { icon: '👗', slug: 'privalia', category: 'Moda' },
+  'nike.com': { icon: '👟', slug: 'nike', category: 'Deportes' },
+  'zara.com': { icon: '👔', slug: 'zara', category: 'Moda' },
+  'att.com.mx': { icon: '📱', slug: 'att', category: 'Electrónica' },
+  'officedepot.com.mx': { icon: '🖨️', slug: 'office depot', category: 'Oficina' },
+  'puma.com': { icon: '🐆', slug: 'puma', category: 'Deportes' },
+  'adidas.com.mx': { icon: '👟', slug: 'adidas', category: 'Deportes' },
+  'shein.com': { icon: '👚', slug: 'shein', category: 'Moda' },
+};
+
+const TIER_HERO_DISCOUNT = {
+  good: { pct: '25%', code: 'KUESKI25' },
+  regular: { pct: '12%', code: 'KUESKI12' },
+  limited: { pct: '5%', code: 'KUESKI5' },
+};
+
+function parseDiscountFromLabel(discountLabel, amount) {
+  const pct = String(discountLabel).match(/(\d+(?:\.\d+)?)\s*%/);
+  const fixed = String(discountLabel).match(/\$\s*([\d,]+(?:\.\d+)?)/);
+  let discount = 0;
+  if (pct) discount = amount * (parseFloat(pct[1]) / 100);
+  if (fixed) discount = parseFloat(fixed[1].replace(/,/g, ''));
+  return Math.min(discount, amount);
+}
+
+function applyHeroTierDiscount(tier) {
+  const card = document.querySelector('.discount-card');
+  const heroAmount = document.querySelector('.discount-card .discount-amount');
+  const heroDesc = document.querySelector('.discount-card .discount-desc');
+  if (!card || !heroAmount || card.dataset.siteCoupon === 'true') return;
+
+  const hero = TIER_HERO_DISCOUNT[tier] || TIER_HERO_DISCOUNT.good;
+  heroAmount.textContent = `${hero.pct} Descuento`;
+  if (heroDesc) {
+    heroDesc.textContent = 'Oferta exclusiva en tu próxima compra en tiendas afiliadas.';
+  }
+  card.dataset.code = hero.code;
+  card.dataset.amount = `${hero.pct} de descuento`;
+  card.dataset.desc = 'Oferta exclusiva en tu próxima compra en tiendas afiliadas.';
+  card.dataset.expiry = '31 de Dic 2026';
+}
+
+function renderCouponMini(store) {
+  const meta = STORE_META[store.domain] || { icon: '🏪' };
+  const expiry = store.expires_at
+    ? new Date(store.expires_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })
+    : '31 de Dic 2026';
+
+  return `
+    <div class="coupon-mini" data-action="coupon-detail" data-feature="purchases"
+      data-code="${escapeHtmlAttr(store.code)}"
+      data-amount="${escapeHtmlAttr(store.discount)}"
+      data-desc="Válido en ${escapeHtmlAttr(store.name)} con Kueski Pay."
+      data-expiry="${escapeHtmlAttr(expiry)}">
+      <div class="coupon-mini-icon">${meta.icon}</div>
+      <div class="coupon-mini-info">
+        <strong>${escapeHtmlAttr(store.name)}</strong>
+        <span>${escapeHtmlAttr(store.discount)}</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderStoreRow(store) {
+  const meta = STORE_META[store.domain] || { icon: '🏪', slug: store.name.toLowerCase(), category: 'Tienda afiliada' };
+
+  return `
+    <div class="store-row" data-name="${escapeHtmlAttr(meta.slug)}">
+      <div class="store-row-icon">${meta.icon}</div>
+      <div class="store-row-info">
+        <strong>${escapeHtmlAttr(store.name)}</strong>
+        <span>Hasta ${escapeHtmlAttr(store.discount)} • ${escapeHtmlAttr(meta.category)}</span>
+      </div>
+      <span class="material-symbols-outlined store-arrow">chevron_right</span>
+    </div>
+  `;
+}
+
+async function loadTierStoreOffers() {
+  const couponsScroll = document.querySelector('.coupons-scroll');
+  const storesList = document.getElementById('stores-list');
+  if (!couponsScroll || !storesList) return;
+
+  const emailParam = currentUserEmail
+    ? `?email=${encodeURIComponent(currentUserEmail)}`
+    : '';
+
+  try {
+    const res = await fetch(`http://localhost:3000/api/cupones/tiendas${emailParam}`);
+    const data = await res.json();
+    if (!data.ok || !Array.isArray(data.tiendas)) return;
+
+    applyHeroTierDiscount(data.credit_tier || 'good');
+
+    const featured = data.tiendas.slice(0, 4);
+    couponsScroll.innerHTML = featured.map(renderCouponMini).join('');
+    storesList.innerHTML = data.tiendas.map(renderStoreRow).join('');
+  } catch (err) {
+    console.error('Error loading tier store offers:', err);
+  }
+}
+
 function applyCreditProfile(c) {
   if (!c) return;
   currentAccountProfile = c;
@@ -168,6 +273,7 @@ async function loadAccountData() {
 
   loadCurrentSiteCoupon();
   updateRemindersIndicator();
+  loadTierStoreOffers();
 }
 
 async function updateRemindersIndicator() {
@@ -462,28 +568,40 @@ async function loadAccountTab() {
 
 // Detect current site and show its coupon on the hero card 
 async function loadCurrentSiteCoupon() {
+  const card = document.querySelector('.discount-card');
+  if (card) card.dataset.siteCoupon = 'false';
+
   try {
     // Get the active tab's URL
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.url) return;
+    if (!tab?.url) {
+      if (currentAccountProfile?.credit_tier) applyHeroTierDiscount(currentAccountProfile.credit_tier);
+      return;
+    }
 
     const domain = new URL(tab.url).hostname.replace('www.', '');
+    const emailParam = currentUserEmail
+      ? `&email=${encodeURIComponent(currentUserEmail)}`
+      : '';
 
     // Check if this merchant has a coupon in the DB
-    const res = await fetch(`http://localhost:3000/api/merchants/check?domain=${domain}`);
+    const res = await fetch(`http://localhost:3000/api/merchants/check?domain=${domain}${emailParam}`);
     const data = await res.json();
 
-    if (!data.affiliated) return;
+    if (!data.affiliated) {
+      if (currentAccountProfile?.credit_tier) applyHeroTierDiscount(currentAccountProfile.credit_tier);
+      return;
+    }
 
     const { merchant, coupon: code, discount } = data.merchant;
 
     // Update the hero card with real data
+    if (card) card.dataset.siteCoupon = 'true';
     document.querySelector('.discount-card .discount-amount').textContent = discount;
     document.querySelector('.discount-card .discount-desc').textContent =
       `Oferta exclusiva en ${data.merchant.name} con Kueski Pay.`;
 
     // Make "Aplicar ahora" open the coupon detail for this store
-    const card = document.querySelector('.discount-card');
     card.dataset.code = code;
     card.dataset.amount = discount;
     card.dataset.desc = `Válido en ${data.merchant.name}.`;
@@ -493,6 +611,7 @@ async function loadCurrentSiteCoupon() {
 
   } catch (err) {
     console.error('Error loading site coupon:', err);
+    if (currentAccountProfile?.credit_tier) applyHeroTierDiscount(currentAccountProfile.credit_tier);
   }
 }
 
@@ -1162,7 +1281,10 @@ async function openCheckout() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const domain = new URL(tab.url).hostname.replace('www.', '');
 
-    const res = await fetch(`http://localhost:3000/api/merchants/check?domain=${domain}`);
+    const emailParam = currentUserEmail
+      ? `&email=${encodeURIComponent(currentUserEmail)}`
+      : '';
+    const res = await fetch(`http://localhost:3000/api/merchants/check?domain=${domain}${emailParam}`);
     const data = await res.json();
 
     if (!data.affiliated) return;
@@ -1201,17 +1323,18 @@ async function checkoutNext() {
   const planesRes = await fetch('http://localhost:3000/api/planes');
   const planesData = await planesRes.json();
 
-  const couponRes = await fetch(`http://localhost:3000/api/cupones/check?codigo=${checkoutState.couponCode}&domain=${checkoutState.domain}`);
+  const emailParam = currentUserEmail
+    ? `&email=${encodeURIComponent(currentUserEmail)}`
+    : '';
+  const couponRes = await fetch(
+    `http://localhost:3000/api/cupones/check?codigo=${checkoutState.couponCode}&domain=${checkoutState.domain}${emailParam}`
+  );
   const couponData = await couponRes.json();
 
   // Calculate discount — handles both % and fixed amount coupons
   let discount = 0;
   if (couponData.valido) {
-    const pct = couponData.cupon.discount.match(/(\d+(\.\d+)?)\s*%/);
-    const fixed = couponData.cupon.discount.match(/\$\s*(\d+(\.\d+)?)/);
-    if (pct) discount = amount * (parseFloat(pct[1]) / 100);
-    if (fixed) discount = parseFloat(fixed[1]);
-    discount = Math.min(discount, amount);
+    discount = parseDiscountFromLabel(couponData.cupon.discount, amount);
   }
 
   const total = amount - discount;

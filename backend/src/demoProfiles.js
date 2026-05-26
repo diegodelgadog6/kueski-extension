@@ -5,8 +5,8 @@ const DEMO_USERS = [
     tier: 'good',
     healthLabel: 'Salud buena',
     memberBadge: 'Miembro Premium',
-    credit_limit: 50000,
-    available_balance: 28000,
+    credit_limit: 20000,
+    available_balance: 15000,
     used_balance: 0,
     credit_score: 780,
     status: 'active',
@@ -25,15 +25,15 @@ const DEMO_USERS = [
     tier: 'regular',
     healthLabel: 'Salud regular',
     memberBadge: 'Miembro',
-    credit_limit: 20000,
-    available_balance: 6500,
-    used_balance: 11000,
+    credit_limit: 12000,
+    available_balance: 3500,
+    used_balance: 7000,
     credit_score: 655,
     status: 'active',
     features: { transfers: true, kueski_cash: true, purchases: true },
     purchase: {
       merchant_domain: 'liverpool.com.mx',
-      total: 11000,
+      total: 7000,
       num_installments: 3,
       installment_offsets: [12, 27, 42],
     },
@@ -44,15 +44,15 @@ const DEMO_USERS = [
     tier: 'limited',
     healthLabel: 'Crédito limitado',
     memberBadge: 'Cuenta restringida',
-    credit_limit: 8000,
-    available_balance: 800,
-    used_balance: 7800,
+    credit_limit: 6000,
+    available_balance: 500,
+    used_balance: 5500,
     credit_score: 510,
     status: 'restricted',
     features: { transfers: false, kueski_cash: false, purchases: false },
     purchase: {
       merchant_domain: 'nike.com',
-      total: 7800,
+      total: 5500,
       num_installments: 3,
       installment_offsets: [-12, 18, 33],
     },
@@ -60,6 +60,85 @@ const DEMO_USERS = [
 ];
 
 const DEMO_EMAILS = new Set(DEMO_USERS.map((user) => user.email.toLowerCase()));
+
+const TIER_DISCOUNT_SCALE = {
+  good: 1,
+  regular: 0.6,
+  limited: 0.35,
+};
+
+const TIER_HERO_DISCOUNT = {
+  good: '25% de descuento',
+  regular: '12% de descuento',
+  limited: '5% de descuento',
+};
+
+function scaleDiscountLabel(discount, tier) {
+  const scale = TIER_DISCOUNT_SCALE[tier] ?? TIER_DISCOUNT_SCALE.good;
+  const str = String(discount || '').trim();
+
+  const pctMatch = str.match(/(\d+(?:\.\d+)?)\s*%/);
+  if (pctMatch) {
+    const value = Math.max(1, Math.round(parseFloat(pctMatch[1]) * scale));
+    return `${value}% off`;
+  }
+
+  const fixedMatch = str.match(/\$\s*(\d+(?:\.\d+)?)/);
+  if (fixedMatch) {
+    const raw = parseFloat(fixedMatch[1]) * scale;
+    const value = Math.max(50, Math.round(raw / 50) * 50);
+    return `$${value.toLocaleString('es-MX')} off`;
+  }
+
+  const cashbackMatch = str.match(/(\d+(?:\.\d+)?)\s*%\s*cashback/i);
+  if (cashbackMatch) {
+    const value = Math.max(1, Math.round(parseFloat(cashbackMatch[1]) * scale));
+    return `${value}% cashback`;
+  }
+
+  if (/msi/i.test(str)) {
+    if (tier === 'limited') return 'MSI no disponible';
+    if (tier === 'regular') return 'MSI selecto';
+    return str;
+  }
+
+  return str;
+}
+
+function getHeroDiscountForTier(tier) {
+  return TIER_HERO_DISCOUNT[tier] ?? TIER_HERO_DISCOUNT.good;
+}
+
+function parseDiscountAmount(discountLabel, monto) {
+  const amount = parseFloat(monto);
+  if (!amount || amount <= 0) return 0;
+
+  const pct = String(discountLabel).match(/(\d+(?:\.\d+)?)\s*%/);
+  const fixed = String(discountLabel).match(/\$\s*([\d,]+(?:\.\d+)?)/);
+  let discount = 0;
+
+  if (pct) discount = amount * (parseFloat(pct[1]) / 100);
+  if (fixed) discount = parseFloat(fixed[1].replace(/,/g, ''));
+
+  return Math.min(discount, amount);
+}
+
+async function resolveCreditTier(db, email) {
+  if (!email) return 'good';
+
+  const accountRes = await db.query(`
+    SELECT u.email, ka.credit_limit, ka.used_balance, ka.status
+    FROM users u
+    JOIN kueski_accounts ka ON ka.user_id = u.id
+    WHERE LOWER(u.email) = LOWER($1)
+  `, [email]);
+
+  if (accountRes.rows.length === 0) return 'good';
+
+  const overdueCount = await countOverdueInstallments(db, email);
+  const enriched = enrichAccountResponse(accountRes.rows[0], overdueCount);
+  return enriched.credit_tier || 'good';
+}
 
 function getDemoProfile(email) {
   if (!email) return null;
@@ -291,4 +370,8 @@ module.exports = {
   countOverdueInstallments,
   ensureDemoUsers,
   assertFeatureAllowed,
+  scaleDiscountLabel,
+  getHeroDiscountForTier,
+  parseDiscountAmount,
+  resolveCreditTier,
 };
