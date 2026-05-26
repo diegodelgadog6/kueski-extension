@@ -1,6 +1,7 @@
 const DEMO_USERS = [
   {
     email: 'bueno@demo.com',
+    password: 'Kueski2026',
     name: 'Ana García',
     tier: 'good',
     healthLabel: 'Salud buena',
@@ -14,6 +15,7 @@ const DEMO_USERS = [
   },
   {
     email: 'regular@demo.com',
+    password: 'Kueski2026',
     name: 'Luis Méndez',
     tier: 'regular',
     healthLabel: 'Salud regular',
@@ -27,6 +29,7 @@ const DEMO_USERS = [
   },
   {
     email: 'limitado@demo.com',
+    password: 'Kueski2026',
     name: 'María López',
     tier: 'limited',
     healthLabel: 'Crédito limitado',
@@ -200,13 +203,16 @@ async function ensureDemoUsers(db) {
 
       if (existingUser.rows.length === 0) {
         const inserted = await client.query(
-          'INSERT INTO users (email, name) VALUES ($1, $2) RETURNING id',
-          [demo.email, demo.name]
+          'INSERT INTO users (email, name, password) VALUES ($1, $2, $3) RETURNING id',
+          [demo.email, demo.name, demo.password]
         );
         userId = inserted.rows[0].id;
       } else {
         userId = existingUser.rows[0].id;
-        await client.query('UPDATE users SET name = $1 WHERE id = $2', [demo.name, userId]);
+        await client.query(
+          'UPDATE users SET name = $1, password = $2 WHERE id = $3',
+          [demo.name, demo.password, userId]
+        );
       }
 
       const existingAccount = await client.query(

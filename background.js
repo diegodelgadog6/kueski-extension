@@ -98,7 +98,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         if (sender.tab && result.affiliated) {
           chrome.action.setBadgeText({ text: '✓', tabId: sender.tab.id });
-          chrome.action.setBadgeBackgroundColor({ color: '#2ECC71', tabId: sender.tab.id });
+          chrome.action.setBadgeBackgroundColor({ color: '#173CEC', tabId: sender.tab.id });
           await chrome.storage.session.set({
             activeMerchantDomain: domain.replace(/^www\./i, ''),
             activeMerchantTabId: sender.tab.id,
@@ -166,7 +166,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     let count = 0;
     const interval = setInterval(() => {
       chrome.action.setBadgeText({ text: count % 2 === 0 ? 'PAY' : '✓' });
-      chrome.action.setBadgeBackgroundColor({ color: '#2ECC71' });
+      chrome.action.setBadgeBackgroundColor({ color: '#173CEC' });
       count++;
       if (count > 6) {
         clearInterval(interval);

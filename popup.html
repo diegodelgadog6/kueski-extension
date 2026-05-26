@@ -13,31 +13,45 @@
 
     <!-- ==================== LOGIN VIEW ==================== -->
     <div id="view-login" class="view active">
-      <div class="login-container">
-        <div class="login-brand">
-          <img src="assets/kueski-logo.webp" style="width:24px;height:24px;object-fit:contain" alt="Kueski">
-          <h1>Bienvenido</h1>
-          <p class="login-subtitle">ACCEDE A TU ASISTENTE FINANCIERO</p>
-        </div>
-        <div class="login-card">
-          <div class="form-group">
-            <label>CORREO ELECTRÓNICO</label>
-            <input type="email" placeholder="usuario@email.com" id="login-email">
+      <div class="login-page">
+        <div class="login-main">
+          <div class="login-brand-official">
+            <img src="assets/kueski-logo.webp" class="login-logo-official" alt="Kueski">
+            <h1 class="login-title-official">Inicia sesión</h1>
           </div>
-          <div class="form-group">
-            <div class="label-row">
-              <label>CONTRASEÑA</label>
-              <a href="#" class="forgot-link">¿Olvidaste?</a>
+
+          <form class="login-form-official" id="login-form" novalidate>
+            <input type="email" class="login-input-official" id="login-email" placeholder="Correo electrónico*" autocomplete="username">
+            <div class="login-password-field">
+              <input type="password" class="login-input-official" id="login-password" placeholder="Contraseña*" autocomplete="current-password">
+              <button type="button" class="login-password-toggle" data-action="toggle-login-password" aria-label="Mostrar contraseña">
+                <span class="material-symbols-outlined" id="login-password-icon">visibility</span>
+              </button>
             </div>
-            <div class="input-wrapper">
-              <input type="password" placeholder="••••••••" id="login-password">
-              <button class="input-icon"><span class="material-symbols-outlined">visibility</span></button>
-            </div>
+            <a href="#" class="login-forgot-official">¿Olvidaste tu contraseña?</a>
+            <button type="submit" class="btn-login-official">Iniciar sesión</button>
+            <p class="login-register-official">
+              ¿Aún no tienes cuenta?
+              <a href="#" data-action="open-kueski-register">Crear una cuenta</a>
+            </p>
+          </form>
+
+          <div class="login-demo-credentials">
+            <p class="login-demo-title">Usuarios demo (clic para autocompletar)</p>
+            <button type="button" class="login-demo-row" data-action="fill-demo" data-email="bueno@demo.com" data-password="Kueski2026">
+              <span class="login-demo-label">Ana · buen crédito</span>
+              <code>bueno@demo.com · Kueski2026</code>
+            </button>
+            <button type="button" class="login-demo-row" data-action="fill-demo" data-email="regular@demo.com" data-password="Kueski2026">
+              <span class="login-demo-label">Luis · crédito regular</span>
+              <code>regular@demo.com · Kueski2026</code>
+            </button>
+            <button type="button" class="login-demo-row" data-action="fill-demo" data-email="limitado@demo.com" data-password="Kueski2026">
+              <span class="login-demo-label">María · crédito limitado</span>
+              <code>limitado@demo.com · Kueski2026</code>
+            </button>
           </div>
-          <button class="btn-primary" data-action="navigate" data-view="home">INICIAR SESIÓN</button>
         </div>
-        <p class="login-footer">¿Nuevo en Kueski? <a href="#" data-action="open-kueski-register">Regístrate</a></p>
-        <p class="login-demo-hint">Demo: <strong>bueno@demo.com</strong> · <strong>regular@demo.com</strong> · <strong>limitado@demo.com</strong></p>
       </div>
     </div>
 
@@ -221,56 +235,7 @@
             <span class="section-link">VER TODAS</span>
           </div>
 
-          <div class="stores-list" id="stores-list">
-            <div class="store-row" data-name="amazon">
-              <div class="store-row-icon">🛒</div>
-              <div class="store-row-info">
-                <strong>Amazon México</strong>
-                <span>Hasta 15% off • Electrónica, Hogar</span>
-              </div>
-              <span class="material-symbols-outlined store-arrow">chevron_right</span>
-            </div>
-            <div class="store-row" data-name="liverpool">
-              <div class="store-row-icon">🏬</div>
-              <div class="store-row-info">
-                <strong>Liverpool</strong>
-                <span>$500 off • Moda, Hogar</span>
-              </div>
-              <span class="material-symbols-outlined store-arrow">chevron_right</span>
-            </div>
-            <div class="store-row" data-name="privalia">
-              <div class="store-row-icon">👗</div>
-              <div class="store-row-info">
-                <strong>Privalia</strong>
-                <span>10% off • Moda</span>
-              </div>
-              <span class="material-symbols-outlined store-arrow">chevron_right</span>
-            </div>
-            <div class="store-row" data-name="nike">
-              <div class="store-row-icon">👟</div>
-              <div class="store-row-info">
-                <strong>Nike</strong>
-                <span>20% off • Deportes</span>
-              </div>
-              <span class="material-symbols-outlined store-arrow">chevron_right</span>
-            </div>
-            <div class="store-row" data-name="office depot">
-              <div class="store-row-icon">🖨️</div>
-              <div class="store-row-info">
-                <strong>Office Depot</strong>
-                <span>Cashback 5% • Oficina</span>
-              </div>
-              <span class="material-symbols-outlined store-arrow">chevron_right</span>
-            </div>
-            <div class="store-row" data-name="puma">
-              <div class="store-row-icon">🐆</div>
-              <div class="store-row-info">
-                <strong>Puma</strong>
-                <span>15% off • Deportes</span>
-              </div>
-              <span class="material-symbols-outlined store-arrow">chevron_right</span>
-            </div>
-          </div>
+          <div class="stores-list" id="stores-list"></div>
         </div>
 
         <!-- ===== KUESKI CARD TAB ===== -->
@@ -892,7 +857,7 @@
           </button>
         </div>
         <div id="checkout-step-1">
-          <p style="font-size:13px;color:#666;margin-bottom:4px">COMPRANDO EN</p>
+          <p style="font-size:13px;color:#3d4f6f;margin-bottom:4px">COMPRANDO EN</p>
           <p id="checkout-merchant" style="font-weight:700;font-size:16px;margin-bottom:16px">Amazon México</p>
 
           <div id="checkout-product-detected" class="checkout-product-card hidden">
@@ -907,27 +872,27 @@
             <input type="number" id="checkout-amount" placeholder="$0.00" min="1">
             <p class="checkout-manual-hint">No detectamos el producto en esta página. Ingresa el monto manualmente.</p>
           </div>
-          <div id="checkout-coupon-info" style="background:#f0faf5;border-radius:10px;padding:12px;margin:12px 0;display:none">
-            <p style="font-size:12px;color:#0a7a4b;margin:0">🎉 Cupón aplicado: <strong id="checkout-coupon-code"></strong></p>
-            <p style="font-size:12px;color:#0a7a4b;margin:4px 0 0">Descuento: <strong id="checkout-coupon-discount"></strong></p>
+          <div id="checkout-coupon-info" style="background:#e3eeff;border-radius:10px;padding:12px;margin:12px 0;display:none">
+            <p style="font-size:12px;color:#0d52bb;margin:0">🎉 Cupón aplicado: <strong id="checkout-coupon-code"></strong></p>
+            <p style="font-size:12px;color:#0d52bb;margin:4px 0 0">Descuento: <strong id="checkout-coupon-discount"></strong></p>
           </div>
           <button class="btn-primary" data-action="checkout-next">Ver planes de pago</button>
         </div>
         <div id="checkout-step-2" style="display:none">
-          <div style="background:#f8f8f8;border-radius:12px;padding:12px;margin-bottom:16px">
-            <p style="font-size:12px;color:#666;margin:0">Total a pagar</p>
-            <p id="checkout-total" style="font-size:24px;font-weight:800;color:#1a1a2e;margin:4px 0">$0.00</p>
-            <p id="checkout-savings" style="font-size:12px;color:#0a7a4b;margin:0"></p>
+          <div style="background:#ffffff;border:1px solid #e4e8f2;border-radius:12px;padding:12px;margin-bottom:16px">
+            <p style="font-size:12px;color:#3d4f6f;margin:0">Total a pagar</p>
+            <p id="checkout-total" style="font-size:24px;font-weight:800;color:#030b64;margin:4px 0">$0.00</p>
+            <p id="checkout-savings" style="font-size:12px;color:#0d52bb;margin:0"></p>
           </div>
-          <p style="font-size:12px;font-weight:700;color:#666;margin-bottom:8px">ELIGE TU PLAN</p>
+          <p style="font-size:12px;font-weight:700;color:#3d4f6f;margin-bottom:8px">ELIGE TU PLAN</p>
           <div id="plan-options" style="display:flex;flex-direction:column;gap:8px"></div>
           <button class="btn-primary" style="margin-top:16px" data-action="checkout-confirm">Confirmar pago</button>
           <button class="btn-secondary" style="margin-top:8px;width:100%" data-action="checkout-back">Atrás</button>
         </div>
         <div id="checkout-step-3" style="display:none;text-align:center;padding:16px 0">
           <div style="font-size:48px;margin-bottom:12px">✅</div>
-          <h2 style="color:#0a7a4b;margin-bottom:8px">¡Pago autorizado!</h2>
-          <p id="checkout-success-msg" style="color:#666;font-size:14px;margin-bottom:16px"></p>
+          <h2 style="color:#173cec;margin-bottom:8px">¡Pago autorizado!</h2>
+          <p id="checkout-success-msg" style="color:#3d4f6f;font-size:14px;margin-bottom:16px"></p>
           <button class="btn-primary" data-action="close-checkout">Ver actividad</button>
         </div>
       </div>

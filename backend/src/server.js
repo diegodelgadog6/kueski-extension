@@ -883,6 +883,35 @@ app.post('/api/tarjeta/cvv', async (req, res) => {
 });
 
 //  Get account info for a user 
+app.post('/api/login', async (req, res) => {
+  const email = String(req.body?.email || '').trim();
+  const password = String(req.body?.password || '');
+
+  if (!email || !password) {
+    return res.status(400).json({ ok: false, error: 'Correo y contraseña requeridos' });
+  }
+
+  try {
+    const userRes = await db.query(
+      'SELECT id, email, name, password FROM users WHERE LOWER(email) = LOWER($1)',
+      [email]
+    );
+
+    if (userRes.rows.length === 0) {
+      return res.status(401).json({ ok: false, error: 'Correo o contraseña incorrectos' });
+    }
+
+    const user = userRes.rows[0];
+    if (String(user.password || '') !== password) {
+      return res.status(401).json({ ok: false, error: 'Correo o contraseña incorrectos' });
+    }
+
+    return res.json({ ok: true, email: user.email, name: user.name });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 app.get('/api/cuenta', async (req, res) => {
   const { email } = req.query;
   if (!email) return res.status(400).json({ ok: false, error: 'email requerido' });
@@ -1167,6 +1196,10 @@ async function ensureTransferSchema() {
       amount NUMERIC(12,2) NOT NULL,
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
+  `);
+
+  await db.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS password VARCHAR(120)
   `);
 
   await ensureDemoUsers(db);

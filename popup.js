@@ -9,18 +9,25 @@ let cardCvvVisible = false;
 let currentCardNumber = '';
 
 const STORE_META = {
-  'amazon.com.mx': { icon: '🛒', slug: 'amazon', category: 'Electrónica, Hogar' },
-  'liverpool.com.mx': { icon: '🏬', slug: 'liverpool', category: 'Moda, Hogar' },
-  'privalia.com.mx': { icon: '👗', slug: 'privalia', category: 'Moda' },
-  'nike.com': { icon: '👟', slug: 'nike', category: 'Deportes' },
-  'zara.com': { icon: '👔', slug: 'zara', category: 'Moda' },
-  'officedepot.com.mx': { icon: '🖨️', slug: 'office depot', category: 'Oficina' },
-  'puma.com': { icon: '🐆', slug: 'puma', category: 'Deportes' },
-  'adidas.mx': { icon: '👟', slug: 'adidas', category: 'Deportes' },
-  'adidas.com.mx': { icon: '👟', slug: 'adidas', category: 'Deportes' },
-  'shein.com.mx': { icon: '👚', slug: 'shein', category: 'Moda' },
-  'shein.com': { icon: '👚', slug: 'shein', category: 'Moda' },
+  'amazon.com.mx': { logo: 'assets/stores/amazon.png', slug: 'amazon', category: 'Electrónica, Hogar' },
+  'liverpool.com.mx': { logo: 'assets/stores/liverpool.png', slug: 'liverpool', category: 'Moda, Hogar' },
+  'privalia.com.mx': { logo: 'assets/stores/privalia.png', slug: 'privalia', category: 'Moda' },
+  'nike.com': { logo: 'assets/stores/nike.png', slug: 'nike', category: 'Deportes' },
+  'zara.com': { logo: 'assets/stores/zara.png', slug: 'zara', category: 'Moda' },
+  'officedepot.com.mx': { logo: 'assets/stores/home-depot.png', slug: 'office depot', category: 'Oficina' },
+  'puma.com': { logo: 'assets/stores/puma.png', slug: 'puma', category: 'Deportes' },
+  'adidas.mx': { logo: 'assets/stores/adidas.png', slug: 'adidas', category: 'Deportes' },
+  'adidas.com.mx': { logo: 'assets/stores/adidas.png', slug: 'adidas', category: 'Deportes' },
+  'shein.com.mx': { logo: 'assets/stores/shein.png', slug: 'shein', category: 'Moda' },
+  'shein.com': { logo: 'assets/stores/shein.png', slug: 'shein', category: 'Moda' },
 };
+
+function renderStoreLogo(meta, wrapperClass = 'store-row-icon') {
+  if (meta?.logo) {
+    return `<div class="${wrapperClass}"><img src="${escapeHtmlAttr(meta.logo)}" alt="" class="store-logo-img"></div>`;
+  }
+  return `<div class="${wrapperClass}">${meta?.icon || '🏪'}</div>`;
+}
 
 const KUESKI_REGISTER_URL = 'https://prod.kueskipay.com/pay/registro';
 
@@ -191,7 +198,7 @@ async function loadProductContext(isAffiliated = true) {
 }
 
 function renderCouponMini(store) {
-  const meta = STORE_META[store.domain] || { icon: '🏪' };
+  const meta = STORE_META[store.domain] || {};
   const expiry = store.expires_at
     ? new Date(store.expires_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })
     : '31 de Dic 2026';
@@ -202,7 +209,7 @@ function renderCouponMini(store) {
       data-amount="${escapeHtmlAttr(store.discount)}"
       data-desc="Válido en ${escapeHtmlAttr(store.name)} con Kueski Pay."
       data-expiry="${escapeHtmlAttr(expiry)}">
-      <div class="coupon-mini-icon">${meta.icon}</div>
+      ${renderStoreLogo(meta, 'coupon-mini-icon')}
       <div class="coupon-mini-info">
         <strong>${escapeHtmlAttr(store.name)}</strong>
         <span>${escapeHtmlAttr(store.discount)}</span>
@@ -212,11 +219,11 @@ function renderCouponMini(store) {
 }
 
 function renderStoreRow(store) {
-  const meta = STORE_META[store.domain] || { icon: '🏪', slug: store.name.toLowerCase(), category: 'Tienda afiliada' };
+  const meta = STORE_META[store.domain] || { slug: store.name.toLowerCase(), category: 'Tienda afiliada' };
 
   return `
     <div class="store-row" data-name="${escapeHtmlAttr(meta.slug)}">
-      <div class="store-row-icon">${meta.icon}</div>
+      ${renderStoreLogo(meta)}
       <div class="store-row-info">
         <strong>${escapeHtmlAttr(store.name)}</strong>
         <span>Hasta ${escapeHtmlAttr(store.discount)} • ${escapeHtmlAttr(meta.category)}</span>
@@ -1744,17 +1751,25 @@ document.addEventListener("DOMContentLoaded", () => {
     switch (action) {
       case "navigate":
         if (actionEl.dataset.view === "home") {
-          // Login — validate user exists in DB
-          const email = document.getElementById("login-email").value.trim();
-          if (!email) {
-            alert("Ingresa tu correo electrónico");
-            return;
-          }
-          loginUser(email);
+          navigate(actionEl.dataset.view);
         } else {
           navigate(actionEl.dataset.view);
         }
         break;
+      case "fill-demo":
+        document.getElementById("login-email").value = actionEl.dataset.email || "";
+        document.getElementById("login-password").value = actionEl.dataset.password || "";
+        document.getElementById("login-email").focus();
+        break;
+      case "toggle-login-password": {
+        const passwordInput = document.getElementById("login-password");
+        const passwordIcon = document.getElementById("login-password-icon");
+        if (!passwordInput || !passwordIcon) break;
+        const show = passwordInput.type === "password";
+        passwordInput.type = show ? "text" : "password";
+        passwordIcon.textContent = show ? "visibility_off" : "visibility";
+        break;
+      }
       case "open-kueski-register":
         openKueskiRegister();
         break;
@@ -1911,22 +1926,43 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   setupKueskiCashCardInputs();
+
+  const loginForm = document.getElementById("login-form");
+  if (loginForm) {
+    loginForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const email = document.getElementById("login-email")?.value.trim();
+      const password = document.getElementById("login-password")?.value || "";
+      if (!email) {
+        alert("Ingresa tu correo electrónico");
+        return;
+      }
+      if (!password) {
+        alert("Ingresa tu contraseña");
+        return;
+      }
+      loginUser(email, password);
+    });
+  }
 });
 
-// Validate user exists in DB before letting them in
-async function loginUser(email) {
+// Validate credentials before letting the user in
+async function loginUser(email, password) {
   try {
-    const res = await fetch(`http://localhost:3000/api/cuenta?email=${email}`);
+    const res = await fetch("http://localhost:3000/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
     const data = await res.json();
 
-    if (!data.ok) {
-      alert("Usuario no encontrado. Prueba bueno@demo.com, regular@demo.com o limitado@demo.com");
+    if (!res.ok || !data.ok) {
+      alert(data.error || "Correo o contraseña incorrectos");
       return;
     }
 
-    // Save logged in user and go to home
     currentUserEmail = email;
-    chrome.storage.local.set({ userEmail: email }); // Persist session
+    chrome.storage.local.set({ userEmail: email });
     navigate("home");
   } catch (err) {
     console.error("Login error:", err);
@@ -2027,14 +2063,14 @@ async function checkoutNext() {
     const perInst = planTotal / plan.num_installments;
     return `
       <div class="plan-option" data-plan-id="${plan.id}"
-           style="border:2px solid #e0e0e0;border-radius:12px;padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+           style="border:2px solid #9fbffa;border-radius:12px;padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
         <div>
-          <p style="font-weight:700;margin:0">${plan.name}</p>
-          <p style="font-size:12px;color:#666;margin:2px 0 0">${plan.interest_rate > 0 ? parseFloat((plan.interest_rate * 100).toFixed(2)) + '% interés' : 'Sin interés'}</p>
+          <p style="font-weight:700;margin:0;color:#030b64">${plan.name}</p>
+          <p style="font-size:12px;color:#3d4f6f;margin:2px 0 0">${plan.interest_rate > 0 ? parseFloat((plan.interest_rate * 100).toFixed(2)) + '% interés' : 'Sin interés'}</p>
         </div>
         <div style="text-align:right">
-          <p style="font-weight:800;color:#1a1a2e;margin:0">$${parseFloat(perInst.toFixed(2)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
-          <p style="font-size:11px;color:#666;margin:0">por quincena</p>
+          <p style="font-weight:800;color:#030b64;margin:0">$${parseFloat(perInst.toFixed(2)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+          <p style="font-size:11px;color:#3d4f6f;margin:0">por quincena</p>
         </div>
       </div>`;
   }).join('');
@@ -2042,15 +2078,15 @@ async function checkoutNext() {
   // Let user click a plan to select it
   plansDiv.querySelectorAll('.plan-option').forEach(el => {
     el.addEventListener('click', () => {
-      plansDiv.querySelectorAll('.plan-option').forEach(p => p.style.border = '2px solid #e0e0e0');
-      el.style.border = '2px solid #0a7a4b';
+      plansDiv.querySelectorAll('.plan-option').forEach(p => p.style.border = '2px solid #9fbffa');
+      el.style.border = '2px solid #173cec';
       checkoutState.planId = parseInt(el.dataset.planId);
     });
   });
 
   // Auto-select first plan by default
   if (planesData.planes.length > 0) {
-    plansDiv.querySelector('.plan-option').style.border = '2px solid #0a7a4b';
+    plansDiv.querySelector('.plan-option').style.border = '2px solid #173cec';
     checkoutState.planId = planesData.planes[0].id;
   }
 
