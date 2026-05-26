@@ -3,7 +3,7 @@ const cors = require('cors');
 require('dotenv').config();
 const db = require('./db');
 
-const DEMO_CREDIT_LIMIT = 45000;
+const DEMO_CREDIT_LIMIT = 20000;
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -763,11 +763,11 @@ async function ensureTransferSchema() {
     );
   `);
 
-  // Prototype: assign fixed demo limit to accounts created before this feature
+  // Prototype: keep all accounts on the fixed demo credit limit
   await db.query(`
     UPDATE kueski_accounts
     SET credit_limit = $1, updated_at = NOW()
-    WHERE credit_limit = 0
+    WHERE credit_limit <> $1
   `, [DEMO_CREDIT_LIMIT]);
 
   // Mark legacy Kueski Cash top-ups that were saved as purchases
