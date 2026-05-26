@@ -759,6 +759,156 @@ button.feature-disabled {
   color: var(--on-surface-variant);
   margin-top: 4px;
   margin-bottom: 16px;
+  line-height: 1.4;
+}
+
+/* ===== KUESKI DIGITAL CARD ===== */
+.kueski-card-shell {
+  margin-bottom: 16px;
+}
+
+.kueski-card-shell-inactive .kueski-card {
+  opacity: 0.55;
+  filter: grayscale(0.35);
+}
+
+.kueski-card {
+  border-radius: 20px;
+  padding: 22px 20px;
+  color: #fff;
+  min-height: 196px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 14px 34px rgba(0, 48, 103, 0.28);
+  background: linear-gradient(135deg, #003067 0%, #004691 55%, #2ecc71 140%);
+}
+
+.kueski-card.credit-health-regular {
+  background: linear-gradient(135deg, #003067 0%, #355f9e 60%, #6b8fd4 140%);
+}
+
+.kueski-card.credit-health-limited {
+  background: linear-gradient(135deg, #4a4f59 0%, #6b7280 55%, #9ca3af 140%);
+}
+
+.kueski-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.kueski-card-logo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.92);
+  padding: 2px;
+}
+
+.kueski-card-type {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.kueski-card-number {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  margin: 18px 0 14px;
+  font-family: "Courier New", monospace;
+}
+
+.kueski-card-meta {
+  display: grid;
+  grid-template-columns: 1.4fr 0.8fr 0.8fr;
+  gap: 10px;
+}
+
+.kueski-card-label {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  opacity: 0.75;
+  margin-bottom: 2px;
+}
+
+.kueski-card-meta strong {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.kueski-card-cvv-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.kueski-card-cvv-toggle {
+  color: #fff;
+  width: 28px;
+  height: 28px;
+}
+
+.kueski-card-cvv-toggle .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.kueski-card-actions {
+  margin-bottom: 16px;
+}
+
+.kueski-card-actions .btn-secondary {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.kueski-card-info {
+  background: var(--surface-container-low);
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kueski-card-info p {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--on-surface-variant);
+  margin: 0;
+}
+
+.kueski-card-info strong {
+  color: var(--on-surface);
+}
+
+.kueski-card-cvv-hint {
+  font-size: 11px !important;
+  opacity: 0.85;
+}
+
+.kueski-card-status-note {
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #c62828;
+  background: #ffebee;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.kueski-card-status-note.hidden {
+  display: none;
 }
 
 .search-bar {
@@ -1122,10 +1272,10 @@ button.feature-disabled {
   border: none;
   color: var(--outline);
   font-family: "Manrope", sans-serif;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
-  letter-spacing: 0.5px;
-  padding: 8px 16px;
+  letter-spacing: 0.3px;
+  padding: 8px 8px;
   border-radius: 14px;
   cursor: pointer;
   transition: all 0.2s;
@@ -1314,29 +1464,6 @@ button.feature-disabled {
   padding: 14px 16px;
   background: var(--surface-container-low);
   border-radius: 14px;
-}
-
-.reminder-actions {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.btn-reminder-pay {
-  border: none;
-  background: var(--primary);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 6px 12px;
-  border-radius: 50px;
-  cursor: pointer;
-}
-
-.btn-reminder-pay:hover {
-  opacity: 0.92;
 }
 
 .reminder-info {
@@ -1559,6 +1686,165 @@ button.feature-disabled {
 .tx-detail-row-total strong {
   color: var(--primary);
   font-size: 15px;
+}
+
+.tx-detail-pay-section .btn-primary {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.installment-progress-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 0 0 12px;
+}
+
+.installment-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.timeline-loading {
+  font-size: 13px;
+  color: var(--on-surface-variant);
+  text-align: center;
+  padding: 8px 0;
+}
+
+.timeline-item {
+  display: flex;
+  gap: 12px;
+  min-height: 72px;
+}
+
+.timeline-item-last {
+  min-height: auto;
+}
+
+.timeline-track {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 18px;
+  flex-shrink: 0;
+}
+
+.timeline-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #cfd4df;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px #cfd4df;
+  flex-shrink: 0;
+}
+
+.timeline-line {
+  flex: 1;
+  width: 2px;
+  background: #e2e6f0;
+  margin: 4px 0;
+  min-height: 24px;
+}
+
+.timeline-item-paid .timeline-dot {
+  background: var(--green);
+  box-shadow: 0 0 0 2px var(--green);
+}
+
+.timeline-item-current .timeline-dot {
+  background: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary);
+}
+
+.timeline-item-locked .timeline-dot {
+  background: #eef0f4;
+  box-shadow: 0 0 0 2px #d8dde8;
+}
+
+.timeline-content {
+  flex: 1;
+  padding-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.timeline-item-last .timeline-content {
+  padding-bottom: 0;
+}
+
+.timeline-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.timeline-head strong {
+  font-size: 13px;
+  color: var(--on-surface);
+}
+
+.timeline-amount {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.timeline-due {
+  font-size: 11px;
+  color: var(--on-surface-variant);
+}
+
+.timeline-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.timeline-status-paid {
+  color: var(--green-dark);
+}
+
+.timeline-status-current {
+  color: #e65100;
+}
+
+.timeline-status-current.is-overdue {
+  color: #c62828;
+}
+
+.timeline-status-locked {
+  color: #8a919e;
+}
+
+.timeline-item-locked .timeline-head strong,
+.timeline-item-locked .timeline-amount,
+.timeline-item-locked .timeline-due {
+  opacity: 0.55;
+}
+
+.btn-timeline-pay {
+  align-self: flex-start;
+  margin-top: 6px;
+  border: none;
+  border-radius: 50px;
+  padding: 7px 14px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-timeline-pay:hover {
+  opacity: 0.92;
 }
 
 /* ===== ANIMATIONS ===== */

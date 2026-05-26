@@ -3,6 +3,10 @@ let currentUserEmail = null;
 let currentAccountProfile = null;
 let allStoresData = [];
 let activeStoreCategory = 'Todas';
+let pendingInstallmentId = null;
+let currentTransactionId = null;
+let cardCvvVisible = false;
+let currentCardNumber = '';
 
 const STORE_META = {
   'amazon.com.mx': { icon: '🛒', slug: 'amazon', category: 'Electrónica, Hogar' },
@@ -246,7 +250,7 @@ function navigate(viewName) {
     .querySelectorAll(".view")
     .forEach((v) => v.classList.remove("active"));
 
-  if (["home", "stores", "activity", "account"].includes(viewName)) {
+  if (["home", "stores", "card", "activity", "account"].includes(viewName)) {
     document.getElementById("view-app").classList.add("active");
     switchTab(viewName);
     loadAccountData(); // Load account data when navigating to app views
@@ -269,7 +273,7 @@ function switchTab(tabName) {
   if (tab) tab.classList.add("active");
 
   const navItems = document.querySelectorAll(".nav-item");
-  const tabOrder = ["home", "stores", "activity", "account"];
+  const tabOrder = ["home", "stores", "card", "activity", "account"];
   const idx = tabOrder.indexOf(tabName);
   if (idx >= 0 && navItems[idx]) navItems[idx].classList.add("active");
 
@@ -279,6 +283,7 @@ function switchTab(tabName) {
   // Load real data when switching tabs from the DB
   if (tabName === "activity") loadActivityData();
   if (tabName === "account") loadAccountTab();
+  if (tabName === "card") loadKueskiCard();
 }
 
 
@@ -287,6 +292,111 @@ function getCreditUsagePercent(usedBalance, creditLimit) {
   const used = parseFloat(usedBalance);
   if (!limit || limit <= 0) return 0;
   return Math.min(100, Math.round((used / limit) * 100));
+}
+
+function formatCardNumberDisplay(number) {
+  return String(number || '').replace(/\D/g, '').match(/.{1,4}/g)?.join(' ') || '—';
+}
+
+function resetCardCvvDisplay() {
+  cardCvvVisible = false;
+  const cvvEl = document.getElementById('kc-cvv');
+  const iconEl = document.getElementById('kc-cvv-icon');
+  if (cvvEl) cvvEl.textContent = '•••';
+  if (iconEl) iconEl.textContent = 'visibility';
+}
+
+async function loadKueskiCard() {
+  if (!currentUserEmail) return;
+
+  resetCardCvvDisplay();
+
+  const cardEl = document.getElementById('kueski-card');
+  const statusNote = document.getElementById('kueski-card-status-note');
+  const shell = document.getElementById('kueski-card-shell');
+
+  if (shell) shell.classList.remove('kueski-card-shell-inactive');
+
+  try {
+    const res = await fetch(
+      `http://localhost:3000/api/tarjeta?email=${encodeURIComponent(currentUserEmail)}`
+    );
+    const data = await res.json();
+    if (!data.ok) return;
+
+    const t = data.tarjeta;
+    currentCardNumber = t.card_number || '';
+
+    document.getElementById('kc-number').textContent = formatCardNumberDisplay(t.card_number);
+    document.getElementById('kc-holder').textContent = t.cardholder_name || '—';
+    document.getElementById('kc-expiry').textContent = t.expiry || '—';
+
+    if (cardEl) {
+      cardEl.classList.remove('credit-health-good', 'credit-health-regular', 'credit-health-limited');
+      cardEl.classList.add(`credit-health-${t.credit_tier || 'good'}`);
+    }
+
+    if (statusNote) {
+      if (!t.card_active) {
+        statusNote.textContent =
+          'Tu tarjeta está pausada por estatus de crédito. Regulariza tu cuenta para volver a usarla.';
+        statusNote.classList.remove('hidden');
+        shell?.classList.add('kueski-card-shell-inactive');
+      } else {
+        statusNote.classList.add('hidden');
+      }
+    }
+  } catch (err) {
+    console.error('Error loading Kueski card:', err);
+  }
+}
+
+async function toggleCardCvv() {
+  if (!currentUserEmail) return;
+
+  const cvvEl = document.getElementById('kc-cvv');
+  const iconEl = document.getElementById('kc-cvv-icon');
+  if (!cvvEl || !iconEl) return;
+
+  if (cardCvvVisible) {
+    resetCardCvvDisplay();
+    return;
+  }
+
+  try {
+    const res = await fetch('http://localhost:3000/api/tarjeta/cvv', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: currentUserEmail }),
+    });
+    const data = await res.json();
+
+    if (!data.ok) {
+      alert(data.error || 'No se pudo generar el CVV');
+      return;
+    }
+
+    cardCvvVisible = true;
+    cvvEl.textContent = data.cvv;
+    iconEl.textContent = 'visibility_off';
+  } catch (err) {
+    console.error('Error generating CVV:', err);
+    alert('No se pudo conectar al servidor');
+  }
+}
+
+function copyCardNumber() {
+  if (!currentCardNumber) return;
+
+  navigator.clipboard.writeText(currentCardNumber.replace(/\D/g, '')).then(() => {
+    const btn = document.querySelector('[data-action="copy-card-number"]');
+    if (!btn) return;
+    const original = btn.innerHTML;
+    btn.innerHTML = '<span class="material-symbols-outlined tiny">check</span> Copiado';
+    setTimeout(() => {
+      btn.innerHTML = original;
+    }, 1500);
+  });
 }
 
 // Load real account data from the API
@@ -460,9 +570,116 @@ function setTransactionDetailBadge(status) {
   badge.className = 'tx-detail-badge ' + (isPaid ? 'paid' : 'pending');
 }
 
-function showTransactionDetail(row) {
+function getInstallmentTimelineState(installment, firstPendingNo) {
+  if (installment.status === 'paid') return 'paid';
+  if (firstPendingNo != null && installment.installment_no === firstPendingNo) return 'current';
+  return 'locked';
+}
+
+function renderInstallmentTimeline(cuotas) {
+  const container = document.getElementById('txd-installment-timeline');
+  const progressLabel = document.getElementById('txd-installment-progress');
+  if (!container) return;
+
+  const total = cuotas[0]?.num_installments || cuotas.length;
+  const paidCount = cuotas.filter((c) => c.status === 'paid').length;
+  const firstPending = cuotas.find((c) => c.status === 'pending');
+  const firstPendingNo = firstPending?.installment_no ?? null;
+
+  if (progressLabel) {
+    progressLabel.textContent = paidCount >= total
+      ? 'Todas las quincenas pagadas'
+      : `${paidCount} de ${total} quincenas pagadas`;
+  }
+
+  pendingInstallmentId = firstPending?.id ?? null;
+
+  if (paidCount >= total) {
+    setTransactionDetailBadge('PAGO COMPLETADO');
+  }
+
+  container.innerHTML = cuotas.map((item, index) => {
+    const state = getInstallmentTimelineState(item, firstPendingNo);
+    const amount = parseFloat(item.amount);
+    const dueText = formatReminderDate(item.due_date);
+    const isLast = index === cuotas.length - 1;
+
+    let statusHtml = '';
+    if (state === 'paid') {
+      const paidDate = item.paid_at ? formatReminderDate(item.paid_at) : '';
+      statusHtml = `
+        <span class="timeline-status timeline-status-paid">
+          <span class="material-symbols-outlined tiny">check_circle</span> Pagada${paidDate ? ` · ${paidDate}` : ''}
+        </span>`;
+    } else if (state === 'current') {
+      const badge = getReminderBadge(item.due_date, false);
+      statusHtml = `
+        <span class="timeline-status timeline-status-current ${badge.status === 'danger' ? 'is-overdue' : ''}">${badge.label}</span>
+        <button class="btn-timeline-pay" type="button"
+          data-action="pay-installment-timeline"
+          data-installment-id="${item.id}">Pagar quincena</button>`;
+    } else {
+      statusHtml = `
+        <span class="timeline-status timeline-status-locked">
+          <span class="material-symbols-outlined tiny">lock</span> Disponible después
+        </span>`;
+    }
+
+    return `
+      <div class="timeline-item timeline-item-${state}${isLast ? ' timeline-item-last' : ''}">
+        <div class="timeline-track">
+          <span class="timeline-dot"></span>
+          ${isLast ? '' : '<span class="timeline-line"></span>'}
+        </div>
+        <div class="timeline-content">
+          <div class="timeline-head">
+            <strong>Quincena ${item.installment_no} de ${total}</strong>
+            <span class="timeline-amount">${formatMoneyValue(amount)}</span>
+          </div>
+          <span class="timeline-due">Vence ${dueText}</span>
+          ${statusHtml}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function loadInstallmentTimeline(transactionId) {
+  const section = document.getElementById('txd-pay-section');
+  const container = document.getElementById('txd-installment-timeline');
+  if (!section || !container) return;
+
+  if (!transactionId || !currentUserEmail) {
+    section.classList.add('hidden');
+    return;
+  }
+
+  section.classList.remove('hidden');
+  container.innerHTML = '<p class="timeline-loading">Cargando quincenas...</p>';
+
+  try {
+    const res = await fetch(
+      `http://localhost:3000/api/transacciones/${transactionId}/cuotas?email=${encodeURIComponent(currentUserEmail)}`
+    );
+    const data = await res.json();
+
+    if (!data.ok || !Array.isArray(data.cuotas) || data.cuotas.length === 0) {
+      section.classList.add('hidden');
+      return;
+    }
+
+    renderInstallmentTimeline(data.cuotas);
+  } catch (err) {
+    console.error('Error loading installment timeline:', err);
+    container.innerHTML = '<p class="timeline-loading">No se pudieron cargar las quincenas</p>';
+  }
+}
+
+async function showTransactionDetail(row) {
   const d = row.dataset;
   const kind = d.type || 'purchase';
+  pendingInstallmentId = null;
+  currentTransactionId = d.transactionId || null;
 
   document.getElementById('txd-kind').textContent = getActivityKindLabel(kind);
   document.getElementById('txd-store').textContent = d.store || 'Kueski Pay';
@@ -472,6 +689,7 @@ function showTransactionDetail(row) {
   document.getElementById('txd-purchase-details').classList.add('hidden');
   document.getElementById('txd-transfer-details').classList.add('hidden');
   document.getElementById('txd-loan-details').classList.add('hidden');
+  document.getElementById('txd-pay-section')?.classList.add('hidden');
 
   if (kind === 'purchase') {
     document.getElementById('txd-original').textContent = d.original || d.amount || '$0.00';
@@ -482,6 +700,7 @@ function showTransactionDetail(row) {
     document.getElementById('txd-installment-amount').textContent = d.installmentAmount || '$0.00';
     document.getElementById('txd-method').textContent = d.method || 'Kueski Pay - Crédito';
     document.getElementById('txd-purchase-details').classList.remove('hidden');
+    await loadInstallmentTimeline(currentTransactionId);
   } else if (kind === 'transfer') {
     const isSent = d.status === 'ENVIADA';
     document.getElementById('txd-transfer-type').textContent = isSent ? 'Enviada' : 'Recibida';
@@ -501,6 +720,8 @@ function showTransactionDetail(row) {
 }
 
 function closeTransactionDetail() {
+  pendingInstallmentId = null;
+  currentTransactionId = null;
   document.getElementById('transaction-overlay').classList.add('hidden');
 }
 
@@ -554,6 +775,7 @@ async function loadActivityData() {
 
         return `
       <div class="transaction-row" data-action="transaction-detail"
+        data-transaction-id="${escapeHtmlAttr(tx.id)}"
         data-type="${escapeHtmlAttr(kind)}"
         data-store="${escapeHtmlAttr(heroTitle)}"
         data-date="${escapeHtmlAttr(formattedDate)}"
@@ -565,6 +787,8 @@ async function loadActivityData() {
         data-installment-amount="${escapeHtmlAttr(formatMoneyValue(tx.amount_per_installment))}"
         data-coupon="${escapeHtmlAttr(getTransactionCouponLabel(tx))}"
         data-savings="${escapeHtmlAttr(formatMoneyValue(tx.discount_amount))}"
+        data-next-installment-id="${escapeHtmlAttr(tx.next_installment_id || '')}"
+        data-next-installment-due="${escapeHtmlAttr(tx.next_installment_due_date ? formatReminderDate(tx.next_installment_due_date) : '')}"
         data-from-name="${escapeHtmlAttr(tx.transfer_from_name || '')}"
         data-from-email="${escapeHtmlAttr(tx.transfer_from_email || '')}"
         data-to-name="${escapeHtmlAttr(tx.transfer_to_name || '')}"
@@ -787,13 +1011,10 @@ async function loadReminders() {
     }
 
     list.innerHTML = data.recordatorios.map((item) => {
-      const isPaid = item.status === 'paid' || item.paid_at != null;
-      const badge = getReminderBadge(item.due_date, isPaid);
+      const badge = getReminderBadge(item.due_date, false);
       const badgeClass =
-        badge.status === 'paid' ? 'badge-paid' : badge.status === 'danger' ? 'badge-danger' : 'badge-warning';
-      const dateText = isPaid
-        ? 'Pagado'
-        : `Quincena ${item.installment_no} de ${item.num_installments} · Vence ${formatReminderDate(item.due_date)}`;
+        badge.status === 'danger' ? 'badge-danger' : 'badge-warning';
+      const dateText = `Quincena ${item.installment_no} de ${item.num_installments} · Vence ${formatReminderDate(item.due_date)}`;
       const amount = parseFloat(item.amount);
 
       return `
@@ -803,10 +1024,7 @@ async function loadReminders() {
             <span class="reminder-amount">$${amount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
             <span class="reminder-date">${dateText}</span>
           </div>
-          <div class="reminder-actions">
-            <span class="reminder-badge ${badgeClass}">${badge.label}</span>
-            ${isPaid ? '' : `<button class="btn-reminder-pay" type="button" data-action="pay-installment" data-installment-id="${item.id}">Pagar</button>`}
-          </div>
+          <span class="reminder-badge ${badgeClass}">${badge.label}</span>
         </div>
       `;
     }).join('');
@@ -884,8 +1102,12 @@ async function payInstallment(installmentId) {
     await loadActivityData();
     updateRemindersIndicator();
 
+    if (currentTransactionId) {
+      await loadInstallmentTimeline(currentTransactionId);
+    }
+
     if (data.pago?.transaction_completed) {
-      alert(`Cuota pagada. ¡Compra en ${data.pago.merchant} liquidada por completo!`);
+      alert(`¡Compra en ${data.pago.merchant} liquidada por completo!`);
     }
   } catch (err) {
     console.error('Error paying installment:', err);
@@ -1136,6 +1358,12 @@ document.addEventListener("DOMContentLoaded", () => {
       case "switch-tab":
         switchTab(actionEl.dataset.tab);
         break;
+      case "toggle-card-cvv":
+        toggleCardCvv();
+        break;
+      case "copy-card-number":
+        copyCardNumber();
+        break;
         case 'coupon-detail':
           // Hero card on affiliated site opens checkout flow
           // Mini coupons open the regular coupon detail overlay
@@ -1159,7 +1387,7 @@ document.addEventListener("DOMContentLoaded", () => {
       case "close-reminders":
         closeReminders();
         break;
-      case "pay-installment":
+      case "pay-installment-timeline":
         payInstallment(actionEl.dataset.installmentId);
         break;
       case "open-transfer":

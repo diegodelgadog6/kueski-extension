@@ -302,6 +302,56 @@
           </div>
         </div>
 
+        <!-- ===== KUESKI CARD TAB ===== -->
+        <div id="tab-card" class="tab">
+          <h2 class="tab-title">Tarjeta Kueski</h2>
+          <p class="tab-desc">Tarjeta digital para pagar en cualquier tienda online.</p>
+
+          <div id="kueski-card-shell" class="kueski-card-shell">
+            <div id="kueski-card" class="kueski-card credit-health-good">
+              <div class="kueski-card-top">
+                <img src="assets/kueski-logo.webp" class="kueski-card-logo" alt="Kueski">
+                <span class="kueski-card-type">Digital</span>
+              </div>
+              <p class="kueski-card-number" id="kc-number">•••• •••• •••• ••••</p>
+              <div class="kueski-card-meta">
+                <div>
+                  <span class="kueski-card-label">Titular</span>
+                  <strong id="kc-holder">—</strong>
+                </div>
+                <div>
+                  <span class="kueski-card-label">Expira</span>
+                  <strong id="kc-expiry">—</strong>
+                </div>
+                <div class="kueski-card-cvv-wrap">
+                  <span class="kueski-card-label">CVV</span>
+                  <div class="kueski-card-cvv-row">
+                    <strong id="kc-cvv">•••</strong>
+                    <button class="icon-btn kueski-card-cvv-toggle" type="button"
+                      data-action="toggle-card-cvv" aria-label="Mostrar CVV">
+                      <span class="material-symbols-outlined" id="kc-cvv-icon">visibility</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="kueski-card-actions">
+            <button class="btn-secondary" type="button" data-action="copy-card-number">
+              <span class="material-symbols-outlined tiny">content_copy</span> Copiar número
+            </button>
+          </div>
+
+          <div class="kueski-card-info">
+            <p><strong>Tiendas no afiliadas:</strong> usa esta tarjeta como débito/crédito en el checkout de cualquier sitio.</p>
+            <p><strong>Tiendas afiliadas:</strong> también puedes pagar con Kueski Pay o con esta tarjeta.</p>
+            <p class="kueski-card-cvv-hint">El CVV es dinámico: cada vez que lo revelas se genera uno nuevo por seguridad.</p>
+          </div>
+
+          <p id="kueski-card-status-note" class="kueski-card-status-note hidden"></p>
+        </div>
+
         <!-- ===== ACTIVITY TAB ===== -->
         <div id="tab-activity" class="tab">
           <h2 class="tab-title">Actividad</h2>
@@ -431,6 +481,11 @@
           </div>
 
           <div class="account-menu">
+            <div class="menu-item" data-action="switch-tab" data-tab="card">
+              <span class="material-symbols-outlined">credit_card</span>
+              <span>Tarjeta Kueski</span>
+              <span class="material-symbols-outlined menu-arrow">chevron_right</span>
+            </div>
             <div class="menu-item">
               <span class="material-symbols-outlined">person</span>
               <span>Datos personales</span>
@@ -478,6 +533,10 @@
         <button class="nav-item" data-action="switch-tab" data-tab="stores">
           <span class="material-symbols-outlined">storefront</span>
           <span>Tiendas</span>
+        </button>
+        <button class="nav-item" data-action="switch-tab" data-tab="card">
+          <span class="material-symbols-outlined">credit_card</span>
+          <span>Tarjeta</span>
         </button>
         <button class="nav-item" data-action="switch-tab" data-tab="activity">
           <span class="material-symbols-outlined">receipt_long</span>
@@ -605,6 +664,12 @@
               <span>Método de pago</span>
               <strong id="txd-method">Kueski Pay - Crédito</strong>
             </div>
+          </div>
+
+          <div id="txd-pay-section" class="tx-detail-section tx-detail-pay-section hidden">
+            <h3 class="tx-detail-section-title">Plan de quincenas</h3>
+            <p id="txd-installment-progress" class="installment-progress-label"></p>
+            <div id="txd-installment-timeline" class="installment-timeline"></div>
           </div>
         </div>
 

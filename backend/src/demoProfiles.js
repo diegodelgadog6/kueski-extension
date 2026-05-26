@@ -6,18 +6,11 @@ const DEMO_USERS = [
     healthLabel: 'Salud buena',
     memberBadge: 'Miembro Premium',
     credit_limit: 20000,
-    available_balance: 15000,
+    available_balance: 0,
     used_balance: 0,
     credit_score: 780,
     status: 'active',
     features: { transfers: true, kueski_cash: true, purchases: true },
-    purchase: {
-      merchant_domain: 'amazon.com.mx',
-      total: 4500,
-      num_installments: 3,
-      installment_offsets: [-45, -30, -15],
-      all_paid: true,
-    },
   },
   {
     email: 'regular@demo.com',
@@ -26,17 +19,11 @@ const DEMO_USERS = [
     healthLabel: 'Salud regular',
     memberBadge: 'Miembro',
     credit_limit: 12000,
-    available_balance: 3500,
-    used_balance: 7000,
+    available_balance: 0,
+    used_balance: 0,
     credit_score: 655,
     status: 'active',
     features: { transfers: true, kueski_cash: true, purchases: true },
-    purchase: {
-      merchant_domain: 'liverpool.com.mx',
-      total: 7000,
-      num_installments: 3,
-      installment_offsets: [12, 27, 42],
-    },
   },
   {
     email: 'limitado@demo.com',
@@ -45,17 +32,11 @@ const DEMO_USERS = [
     healthLabel: 'Crédito limitado',
     memberBadge: 'Cuenta restringida',
     credit_limit: 6000,
-    available_balance: 500,
-    used_balance: 5500,
+    available_balance: 0,
+    used_balance: 0,
     credit_score: 510,
     status: 'restricted',
     features: { transfers: false, kueski_cash: false, purchases: false },
-    purchase: {
-      merchant_domain: 'nike.com',
-      total: 5500,
-      num_installments: 3,
-      installment_offsets: [-12, 18, 33],
-    },
   },
 ];
 
@@ -157,7 +138,7 @@ function enrichAccountResponse(accountRow, overdueCount = 0) {
       credit_tier: demo.tier,
       credit_health_label: demo.healthLabel,
       member_badge: demo.memberBadge,
-      overdue_count: demo.tier === 'limited' ? 1 : 0,
+      overdue_count: overdueCount,
       features: { ...demo.features },
     };
   }
@@ -203,46 +184,6 @@ async function countOverdueInstallments(db, email) {
   `, [email]);
 
   return result.rows[0]?.overdue_count || 0;
-}
-
-async function seedDemoPurchase(client, accountId, purchase) {
-  const merchantRes = await client.query(
-    'SELECT id FROM merchants WHERE domain = $1 LIMIT 1',
-    [purchase.merchant_domain]
-  );
-  const merchantId = merchantRes.rows[0]?.id || null;
-
-  const planRes = await client.query(
-    'SELECT id, num_installments FROM payment_plans WHERE num_installments = $1 AND active = TRUE LIMIT 1',
-    [purchase.num_installments]
-  );
-  const plan = planRes.rows[0] || (await client.query(
-    'SELECT id, num_installments FROM payment_plans WHERE active = TRUE ORDER BY num_installments LIMIT 1'
-  )).rows[0];
-
-  const total = purchase.total;
-  const perInst = total / plan.num_installments;
-
-  const txRes = await client.query(`
-    INSERT INTO transactions
-      (account_id, plan_id, merchant_id, original_amount, discount_amount, total_amount, amount_per_installment, status)
-    VALUES ($1, $2, $3, $4, 0, $4, $5, 'authorized')
-    RETURNING id
-  `, [accountId, plan.id, merchantId, total.toFixed(2), perInst.toFixed(2)]);
-
-  const transactionId = txRes.rows[0].id;
-  const offsets = purchase.installment_offsets;
-
-  const allPaid = purchase.all_paid === true;
-
-  for (let i = 0; i < plan.num_installments; i += 1) {
-    const offsetDays = offsets[i] ?? (i + 1) * 15;
-    const status = allPaid ? 'paid' : 'pending';
-    await client.query(`
-      INSERT INTO installments (transaction_id, installment_no, amount, due_date, status, paid_at)
-      VALUES ($1, $2, $3, CURRENT_DATE + ($4 * INTERVAL '1 day'), $5, $6)
-    `, [transactionId, i + 1, perInst.toFixed(2), offsetDays, status, allPaid ? new Date() : null]);
-  }
 }
 
 async function ensureDemoUsers(db) {
@@ -320,7 +261,6 @@ async function ensureDemoUsers(db) {
         WHERE from_account_id = $1 OR to_account_id = $1
       `, [accountId]);
 
-      await seedDemoPurchase(client, accountId, demo.purchase);
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK');

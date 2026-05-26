@@ -22,6 +22,32 @@ function hostnameMatchesMerchant(hostname, merchantDomain) {
   return host === merchant || host.endsWith(`.${merchant}`);
 }
 
+function buildVirtualCardNumber(accountId) {
+  let seed = Math.abs(parseInt(accountId, 10) * 2654435761);
+  const parts = ['4539'];
+  for (let i = 0; i < 3; i += 1) {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    parts.push(String(1000 + (seed % 9000)));
+  }
+  return parts.join(' ');
+}
+
+function formatCardNumberGroups(number) {
+  return String(number).replace(/\D/g, '').match(/.{1,4}/g)?.join(' ') || number;
+}
+
+function buildCardExpiry(referenceDate) {
+  const d = referenceDate ? new Date(referenceDate) : new Date();
+  d.setFullYear(d.getFullYear() + 3);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${mm}/${yy}`;
+}
+
+function generateDynamicCvv() {
+  return String(Math.floor(100 + Math.random() * 900));
+}
+
 async function findAffiliatedMerchant(hostname) {
   const host = String(hostname || '').replace(/^www\./i, '').toLowerCase();
   const result = await db.query(`
@@ -315,6 +341,46 @@ app.get('/api/recordatorios', async (req, res) => {
   }
 });
 
+app.get('/api/transacciones/:transactionId/cuotas', async (req, res) => {
+  const { email } = req.query;
+  const transactionId = parseInt(req.params.transactionId, 10);
+
+  if (!email) {
+    return res.status(400).json({ ok: false, error: 'email requerido' });
+  }
+  if (!transactionId) {
+    return res.status(400).json({ ok: false, error: 'transactionId inválido' });
+  }
+
+  try {
+    const result = await db.query(`
+      SELECT
+        i.id,
+        i.installment_no,
+        i.amount,
+        i.due_date,
+        i.status,
+        i.paid_at,
+        pp.num_installments
+      FROM installments i
+      JOIN transactions t ON t.id = i.transaction_id
+      JOIN kueski_accounts ka ON ka.id = t.account_id
+      JOIN users u ON u.id = ka.user_id
+      JOIN payment_plans pp ON pp.id = t.plan_id
+      WHERE u.email = $1 AND t.id = $2
+      ORDER BY i.installment_no ASC
+    `, [email, transactionId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ ok: false, error: 'Compra no encontrada' });
+    }
+
+    res.json({ ok: true, cuotas: result.rows });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 app.post('/api/recordatorios/pagar', async (req, res) => {
   const { email, installment_id } = req.body || {};
   if (!email || !installment_id) {
@@ -356,6 +422,22 @@ app.post('/api/recordatorios/pagar', async (req, res) => {
     if (installment.status === 'paid') {
       await client.query('ROLLBACK');
       return res.status(400).json({ ok: false, error: 'Esta cuota ya fue pagada' });
+    }
+
+    const priorPendingRes = await client.query(`
+      SELECT COUNT(*)::int AS prior_pending
+      FROM installments
+      WHERE transaction_id = $1
+        AND installment_no < $2
+        AND status = 'pending'
+    `, [installment.transaction_id, installment.installment_no]);
+
+    if (priorPendingRes.rows[0].prior_pending > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        ok: false,
+        error: 'Debes pagar las quincenas anteriores antes de continuar.',
+      });
     }
 
     const amount = parseFloat(installment.amount);
@@ -545,6 +627,74 @@ app.post('/api/transferencias', async (req, res) => {
   }
 });
 
+app.get('/api/tarjeta', async (req, res) => {
+  const { email } = req.query;
+  if (!email) return res.status(400).json({ ok: false, error: 'email requerido' });
+
+  try {
+    const result = await db.query(`
+      SELECT u.name, u.email, ka.id AS account_id, ka.account_number,
+             ka.available_balance, ka.used_balance, ka.credit_limit,
+             ka.status, ka.created_at
+      FROM users u
+      JOIN kueski_accounts ka ON ka.user_id = u.id
+      WHERE u.email = $1
+    `, [email]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ ok: false, error: 'Usuario no encontrado' });
+    }
+
+    const row = result.rows[0];
+    const overdueCount = await countOverdueInstallments(db, email);
+    const profile = enrichAccountResponse(row, overdueCount);
+    const cardNumber = buildVirtualCardNumber(row.account_id);
+
+    res.json({
+      ok: true,
+      tarjeta: {
+        card_number: cardNumber,
+        card_number_masked: `•••• •••• •••• ${cardNumber.slice(-4)}`,
+        cardholder_name: String(row.name || 'Titular Kueski').toUpperCase(),
+        expiry: buildCardExpiry(row.created_at),
+        account_number: row.account_number,
+        available_balance: row.available_balance,
+        status: row.status,
+        credit_tier: profile.credit_tier,
+        card_active: row.status === 'active',
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/tarjeta/cvv', async (req, res) => {
+  const { email } = req.body || {};
+  if (!email) return res.status(400).json({ ok: false, error: 'email requerido' });
+
+  try {
+    const result = await db.query(`
+      SELECT ka.status
+      FROM users u
+      JOIN kueski_accounts ka ON ka.user_id = u.id
+      WHERE u.email = $1
+    `, [email]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ ok: false, error: 'Usuario no encontrado' });
+    }
+
+    if (result.rows[0].status !== 'active') {
+      return res.status(403).json({ ok: false, error: 'Tarjeta no disponible con tu estatus de crédito actual.' });
+    }
+
+    res.json({ ok: true, cvv: generateDynamicCvv() });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 //  Get account info for a user 
 app.get('/api/cuenta', async (req, res) => {
   const { email } = req.query;
@@ -597,7 +747,16 @@ app.get('/api/cuenta', async (req, res) => {
                    )
                  THEN TRUE
                  ELSE FALSE
-               END AS is_loan
+               END AS is_loan,
+               (SELECT i.id FROM installments i
+                WHERE i.transaction_id = t.id AND i.status = 'pending'
+                ORDER BY i.due_date ASC, i.installment_no ASC LIMIT 1) AS next_installment_id,
+               (SELECT i.due_date FROM installments i
+                WHERE i.transaction_id = t.id AND i.status = 'pending'
+                ORDER BY i.due_date ASC, i.installment_no ASC LIMIT 1) AS next_installment_due_date,
+               (SELECT i.installment_no FROM installments i
+                WHERE i.transaction_id = t.id AND i.status = 'pending'
+                ORDER BY i.due_date ASC, i.installment_no ASC LIMIT 1) AS next_installment_no
         FROM transactions t
         JOIN kueski_accounts ka ON ka.id = t.account_id
         JOIN users u            ON u.id  = ka.user_id
@@ -621,7 +780,10 @@ app.get('/api/cuenta', async (req, res) => {
                u_from.email AS transfer_from_email,
                u_to.name AS transfer_to_name,
                u_to.email AS transfer_to_email,
-               FALSE AS is_loan
+               FALSE AS is_loan,
+               NULL::integer AS next_installment_id,
+               NULL::timestamp AS next_installment_due_date,
+               NULL::integer AS next_installment_no
         FROM user_transfers ut
         JOIN kueski_accounts ka ON ka.id = ut.from_account_id OR ka.id = ut.to_account_id
         JOIN users u ON u.id = ka.user_id
