@@ -23,6 +23,12 @@ const STORE_META = {
   'shein.com': { icon: '👚', slug: 'shein', category: 'Moda' },
 };
 
+const KUESKI_REGISTER_URL = 'https://prod.kueskipay.com/pay/registro';
+
+function openKueskiRegister() {
+  chrome.tabs.create({ url: KUESKI_REGISTER_URL });
+}
+
 function parseDiscountFromLabel(discountLabel, amount) {
   const pct = String(discountLabel).match(/(\d+(?:\.\d+)?)\s*%/);
   const fixed = String(discountLabel).match(/\$\s*([\d,]+(?:\.\d+)?)/);
@@ -1736,20 +1742,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     switch (action) {
       case "navigate":
-        if (actionEl.dataset.view === "onboarding") {
-          // Register form — save to DB before proceeding
-          const name = document
-            .querySelector('#view-register input[type="text"]')
-            .value.trim();
-          const email = document
-            .querySelector('#view-register input[type="email"]')
-            .value.trim();
-          if (!name || !email) {
-            alert("Completa todos los campos");
-            return;
-          }
-          registerUser(name, email);
-        } else if (actionEl.dataset.view === "home") {
+        if (actionEl.dataset.view === "home") {
           // Login — validate user exists in DB
           const email = document.getElementById("login-email").value.trim();
           if (!email) {
@@ -1760,6 +1753,9 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
           navigate(actionEl.dataset.view);
         }
+        break;
+      case "open-kueski-register":
+        openKueskiRegister();
         break;
       case "switch-tab":
         switchTab(actionEl.dataset.tab);
@@ -1934,32 +1930,6 @@ async function loginUser(email) {
   } catch (err) {
     console.error("Login error:", err);
     alert("No se pudo conectar al servidor.");
-  }
-}
-
-//  Register new user in DB then go to onboarding 
-async function registerUser(name, email) {
-  try {
-    const res = await fetch('http://localhost:3000/api/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email })
-    });
-    const data = await res.json();
-
-    if (!data.ok) {
-      alert(data.error || 'Error al registrar usuario');
-      return;
-    }
-
-    // Success — go to onboarding
-    currentUserEmail = email;
-    chrome.storage.local.set({ userEmail: email }); // Persist session
-    navigate('onboarding');
-
-  } catch (err) {
-    console.error('Register error:', err);
-    alert('No se pudo conectar al servidor.');
   }
 }
 

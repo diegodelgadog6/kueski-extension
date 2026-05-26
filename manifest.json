@@ -3,7 +3,7 @@
   "name": "Kueski Smart Widget",
   "version": "1.0.0",
   "description": "Tu asistente financiero inteligente. Cupones, saldo y más mientras navegas.",
-  "permissions": ["activeTab", "storage", "notifications"],
+  "permissions": ["activeTab", "storage", "notifications", "tabs"],
   "host_permissions": ["http://localhost:3000/*"],
   "action": {
     "default_popup": "popup.html",
