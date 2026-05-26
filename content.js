@@ -43,7 +43,7 @@
     });
 
     document.getElementById('kueski-pay-btn').addEventListener('click', () => {
-      chrome.runtime.sendMessage({ type: 'OPEN_POPUP' }, (response) => {
+      chrome.runtime.sendMessage({ type: 'OPEN_POPUP', domain: currentDomain }, (response) => {
         if (response && response.ok) {
           return;
         }

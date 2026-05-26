@@ -1,6 +1,8 @@
 // Track the currently logged-in user
 let currentUserEmail = null;
 let currentAccountProfile = null;
+let allStoresData = [];
+let activeStoreCategory = 'Todas';
 
 const STORE_META = {
   'amazon.com.mx': { icon: '🛒', slug: 'amazon', category: 'Electrónica, Hogar' },
@@ -24,9 +26,11 @@ function parseDiscountFromLabel(discountLabel, amount) {
   return Math.min(discount, amount);
 }
 
-function setSitePromoVisible(show) {
+function setSitePromoState(state) {
   const card = document.querySelector('.discount-card');
-  if (card) card.classList.toggle('hidden', !show);
+  const hint = document.getElementById('site-promo-hint');
+  if (card) card.classList.toggle('hidden', state !== 'affiliated');
+  if (hint) hint.classList.toggle('hidden', state !== 'unaffiliated');
 }
 
 function isCheckoutPageUrl(url) {
@@ -38,6 +42,20 @@ function isCheckoutPageUrl(url) {
   } catch (_err) {
     return false;
   }
+}
+
+async function resolveActivePageDomain() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (isCheckoutPageUrl(tab?.url)) {
+      return new URL(tab.url).hostname.replace(/^www\./i, '');
+    }
+  } catch (_err) {
+    // Fall through to stored domain when tab URL is unavailable (e.g. popup opened from banner).
+  }
+
+  const stored = await chrome.storage.session.get(['activeMerchantDomain']);
+  return stored.activeMerchantDomain?.replace(/^www\./i, '') || null;
 }
 
 function renderCouponMini(store) {
@@ -90,12 +108,61 @@ async function loadTierStoreOffers() {
     const data = await res.json();
     if (!data.ok || !Array.isArray(data.tiendas)) return;
 
+    allStoresData = data.tiendas;
     const featured = data.tiendas.slice(0, 4);
     couponsScroll.innerHTML = featured.map(renderCouponMini).join('');
-    storesList.innerHTML = data.tiendas.map(renderStoreRow).join('');
+    renderStoresList();
   } catch (err) {
     console.error('Error loading tier store offers:', err);
   }
+}
+
+function storeMatchesFilters(store) {
+  const meta = STORE_META[store.domain] || {
+    slug: store.name.toLowerCase(),
+    category: 'Tienda afiliada',
+  };
+  const categoryText = meta.category.toLowerCase();
+  const name = store.name.toLowerCase();
+  const slug = meta.slug.toLowerCase();
+  const query = document.getElementById('store-search')?.value.toLowerCase().trim() || '';
+
+  const matchesCategory = activeStoreCategory === 'Todas'
+    || categoryText.includes(activeStoreCategory.toLowerCase());
+  const matchesSearch = !query
+    || name.includes(query)
+    || slug.includes(query)
+    || categoryText.includes(query);
+
+  return matchesCategory && matchesSearch;
+}
+
+function bindStoreRows() {
+  document.querySelectorAll('#stores-list .store-row').forEach((row) => {
+    if (row.dataset.bound === 'true') return;
+    row.dataset.bound = 'true';
+    row.style.cursor = 'pointer';
+    row.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openStore(row.getAttribute('data-name'));
+    });
+  });
+}
+
+function renderStoresList() {
+  const storesList = document.getElementById('stores-list');
+  if (!storesList) return;
+
+  const filtered = allStoresData.filter(storeMatchesFilters);
+
+  if (filtered.length === 0) {
+    storesList.innerHTML =
+      '<p style="text-align:center;padding:1rem;opacity:0.5">No hay tiendas que coincidan</p>';
+    return;
+  }
+
+  storesList.innerHTML = filtered.map(renderStoreRow).join('');
+  bindStoreRows();
 }
 
 function applyCreditProfile(c) {
@@ -563,13 +630,12 @@ async function loadCurrentSiteCoupon() {
   if (card) card.dataset.siteCoupon = 'false';
 
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!isCheckoutPageUrl(tab?.url)) {
-      setSitePromoVisible(false);
+    const domain = await resolveActivePageDomain();
+    if (!domain) {
+      setSitePromoState('unaffiliated');
       return;
     }
 
-    const domain = new URL(tab.url).hostname.replace(/^www\./i, '');
     const emailParam = currentUserEmail
       ? `&email=${encodeURIComponent(currentUserEmail)}`
       : '';
@@ -578,13 +644,13 @@ async function loadCurrentSiteCoupon() {
     const data = await res.json();
 
     if (!data.affiliated) {
-      setSitePromoVisible(false);
+      setSitePromoState('unaffiliated');
       return;
     }
 
     const { merchant, coupon: code, discount } = data.merchant;
 
-    setSitePromoVisible(true);
+    setSitePromoState('affiliated');
     if (card) card.dataset.siteCoupon = 'true';
     document.querySelector('.discount-card .discount-amount').textContent = discount;
     document.querySelector('.discount-card .discount-desc').textContent =
@@ -599,7 +665,7 @@ async function loadCurrentSiteCoupon() {
 
   } catch (err) {
     console.error('Error loading site coupon:', err);
-    setSitePromoVisible(false);
+    setSitePromoState('unaffiliated');
   }
 }
 
@@ -983,11 +1049,7 @@ function copyCode() {
 
 // ===== STORE SEARCH FILTER =====
 function filterStores() {
-  const query = document.getElementById("store-search").value.toLowerCase();
-  document.querySelectorAll(".store-row").forEach((row) => {
-    const name = row.getAttribute("data-name");
-    row.style.display = name.includes(query) ? "flex" : "none";
-  });
+  renderStoresList();
 }
 
 async function requestDemoLoan() {
@@ -1184,27 +1246,8 @@ document.addEventListener("DOMContentLoaded", () => {
         .querySelectorAll(".cat-chip")
         .forEach((c) => c.classList.remove("active"));
       chip.classList.add("active");
-    });
-  });
-  // Add clickable behavior for store rows
-  document.querySelectorAll(".store-row").forEach((row) => {
-    row.style.cursor = "pointer";
-    row.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const storeName = row.getAttribute("data-name");
-      openStore(storeName);
-    });
-  });
-
-  // Add clickable behavior for store chips (featured stores)
-  document.querySelectorAll(".store-chip").forEach((chip) => {
-    const span = chip.querySelector("span");
-    const storeName = span ? span.textContent.toLowerCase() : null;
-    chip.style.cursor = "pointer";
-    chip.addEventListener("click", (e) => {
-      // Prevent global delegation from also handling this click
-      e.stopPropagation();
-      if (storeName) openStore(storeName);
+      activeStoreCategory = chip.textContent.trim();
+      renderStoresList();
     });
   });
 });
@@ -1265,9 +1308,8 @@ async function openCheckout() {
     return;
   }
   try {
-    // Get domain of current site
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const domain = new URL(tab.url).hostname.replace('www.', '');
+    const domain = await resolveActivePageDomain();
+    if (!domain) return;
 
     const emailParam = currentUserEmail
       ? `&email=${encodeURIComponent(currentUserEmail)}`

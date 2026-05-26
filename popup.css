@@ -394,6 +394,53 @@ body {
 .discount-card.hidden {
   display: none;
 }
+.site-promo-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #f4f6fb;
+  border: 1px solid #e2e6f0;
+  padding: 20px;
+  border-radius: 20px;
+  color: var(--text-primary, #1a1a2e);
+}
+.site-promo-hint.hidden {
+  display: none;
+}
+.site-promo-hint-icon {
+  font-size: 28px;
+  color: var(--blue, #004691);
+}
+.site-promo-hint-title {
+  font-size: 16px;
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: -0.3px;
+}
+.site-promo-hint-desc {
+  font-size: 13px;
+  line-height: 1.45;
+  color: #5a6270;
+  margin: 4px 0 0;
+}
+.site-promo-hint-btn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  border-radius: 50px;
+  padding: 8px 14px;
+  background: white;
+  color: var(--blue, #004691);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+.site-promo-hint-btn:hover {
+  background: #eef3fb;
+}
 .discount-card {
   background: linear-gradient(135deg, var(--green), var(--green-dark));
   padding: 24px;

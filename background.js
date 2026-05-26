@@ -78,8 +78,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (sender.tab && result.affiliated) {
           chrome.action.setBadgeText({ text: '✓', tabId: sender.tab.id });
           chrome.action.setBadgeBackgroundColor({ color: '#2ECC71', tabId: sender.tab.id });
+          await chrome.storage.session.set({
+            activeMerchantDomain: domain.replace(/^www\./i, ''),
+            activeMerchantTabId: sender.tab.id,
+          });
         } else if (sender.tab) {
           chrome.action.setBadgeText({ text: '', tabId: sender.tab.id });
+          const stored = await chrome.storage.session.get(['activeMerchantTabId']);
+          if (stored.activeMerchantTabId === sender.tab.id) {
+            await chrome.storage.session.remove(['activeMerchantDomain', 'activeMerchantTabId']);
+          }
         }
 
         sendResponse(result);
@@ -95,6 +103,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'OPEN_POPUP') {
     (async () => {
       try {
+        const domain = String(message.domain || '').replace(/^www\./i, '').toLowerCase();
+        if (domain) {
+          await chrome.storage.session.set({ activeMerchantDomain: domain });
+        }
         if (typeof chrome.action.openPopup === 'function') {
           await chrome.action.openPopup();
           sendResponse({ ok: true });
