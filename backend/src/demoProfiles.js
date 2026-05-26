@@ -7,7 +7,7 @@ const DEMO_USERS = [
     memberBadge: 'Miembro Premium',
     credit_limit: 50000,
     available_balance: 28000,
-    used_balance: 4500,
+    used_balance: 0,
     credit_score: 780,
     status: 'active',
     features: { transfers: true, kueski_cash: true, purchases: true },
@@ -15,7 +15,8 @@ const DEMO_USERS = [
       merchant_domain: 'amazon.com.mx',
       total: 4500,
       num_installments: 3,
-      installment_offsets: [18, 33, 48],
+      installment_offsets: [-45, -30, -15],
+      all_paid: true,
     },
   },
   {
@@ -153,12 +154,15 @@ async function seedDemoPurchase(client, accountId, purchase) {
   const transactionId = txRes.rows[0].id;
   const offsets = purchase.installment_offsets;
 
+  const allPaid = purchase.all_paid === true;
+
   for (let i = 0; i < plan.num_installments; i += 1) {
     const offsetDays = offsets[i] ?? (i + 1) * 15;
+    const status = allPaid ? 'paid' : 'pending';
     await client.query(`
-      INSERT INTO installments (transaction_id, installment_no, amount, due_date, status)
-      VALUES ($1, $2, $3, CURRENT_DATE + ($4 * INTERVAL '1 day'), 'pending')
-    `, [transactionId, i + 1, perInst.toFixed(2), offsetDays]);
+      INSERT INTO installments (transaction_id, installment_no, amount, due_date, status, paid_at)
+      VALUES ($1, $2, $3, CURRENT_DATE + ($4 * INTERVAL '1 day'), $5, $6)
+    `, [transactionId, i + 1, perInst.toFixed(2), offsetDays, status, allPaid ? new Date() : null]);
   }
 }
 
