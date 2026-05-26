@@ -10,7 +10,7 @@ const {
   assertFeatureAllowed,
 } = require('./demoProfiles');
 
-const DEMO_CREDIT_LIMIT = 45000;
+const DEMO_CREDIT_LIMIT = 20000;
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
