@@ -189,6 +189,25 @@ async function countOverdueInstallments(db, email) {
   return result.rows[0]?.overdue_count || 0;
 }
 
+async function syncAccountUsedBalance(dbConn, accountId) {
+  const result = await dbConn.query(`
+    SELECT COALESCE(SUM(i.amount), 0)::numeric AS outstanding
+    FROM installments i
+    INNER JOIN transactions t ON t.id = i.transaction_id
+    WHERE t.account_id = $1
+      AND i.status = 'pending'
+  `, [accountId]);
+
+  const outstanding = parseFloat(result.rows[0]?.outstanding || 0);
+  await dbConn.query(`
+    UPDATE kueski_accounts
+    SET used_balance = $1, updated_at = NOW()
+    WHERE id = $2
+  `, [outstanding.toFixed(2), accountId]);
+
+  return outstanding;
+}
+
 async function ensureDemoUsers(db) {
   for (const demo of DEMO_USERS) {
     const client = await db.pool.connect();
@@ -315,6 +334,7 @@ module.exports = {
   enrichAccountResponse,
   countOverdueInstallments,
   ensureDemoUsers,
+  syncAccountUsedBalance,
   assertFeatureAllowed,
   scaleDiscountLabel,
   getHeroDiscountForTier,

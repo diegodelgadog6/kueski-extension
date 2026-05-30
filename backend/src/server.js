@@ -4,7 +4,9 @@ require('dotenv').config();
 const db = require('./db');
 const {
   DEMO_EMAILS,
+  DEMO_USERS,
   ensureDemoUsers,
+  syncAccountUsedBalance,
   enrichAccountResponse,
   countOverdueInstallments,
   assertFeatureAllowed,
@@ -274,17 +276,9 @@ app.post('/api/prestamo-personal', async (req, res) => {
       await client.query(`
         UPDATE kueski_accounts
         SET available_balance = available_balance + $1,
-            used_balance = used_balance + $2,
-            updated_at = NOW()
-        WHERE id = $3
-      `, [parsedAmount.toFixed(2), total.toFixed(2), account.id]);
-    } else {
-      await client.query(`
-        UPDATE kueski_accounts
-        SET used_balance = used_balance + $1,
             updated_at = NOW()
         WHERE id = $2
-      `, [total.toFixed(2), account.id]);
+      `, [parsedAmount.toFixed(2), account.id]);
     }
 
     const txRes = await client.query(`
@@ -301,6 +295,8 @@ app.post('/api/prestamo-personal', async (req, res) => {
         VALUES ($1, $2, $3, CURRENT_DATE + ($4 * INTERVAL '15 days'), 'pending')
       `, [transactionId, i, perInst.toFixed(2), i]);
     }
+
+    await syncAccountUsedBalance(client, account.id);
 
     const disbursementLabel = disbursement === 'kueski_balance'
       ? 'saldo Kueski Pay'
@@ -645,10 +641,11 @@ app.post('/api/recordatorios/pagar', async (req, res) => {
     await client.query(`
       UPDATE kueski_accounts
       SET available_balance = available_balance - $1,
-          used_balance = GREATEST(used_balance - $1, 0),
           updated_at = NOW()
       WHERE id = $2
     `, [amount.toFixed(2), installment.account_id]);
+
+    await syncAccountUsedBalance(client, installment.account_id);
 
     const pendingRes = await client.query(`
       SELECT COUNT(*)::int AS pending_count
@@ -912,6 +909,24 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+app.post('/api/demo/reset', async (_req, res) => {
+  try {
+    await ensureDemoUsers(db);
+    return res.json({
+      ok: true,
+      message: 'Usuarios demo restablecidos a saldos y transacciones iniciales.',
+      usuarios: DEMO_USERS.map((user) => ({
+        email: user.email,
+        available_balance: user.available_balance,
+        credit_limit: user.credit_limit,
+        password: user.password,
+      })),
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 app.get('/api/cuenta', async (req, res) => {
   const { email } = req.query;
   if (!email) return res.status(400).json({ ok: false, error: 'email requerido' });
@@ -927,6 +942,29 @@ app.get('/api/cuenta', async (req, res) => {
     `, [email]);
     if (cuenta.rows.length === 0)
       return res.status(404).json({ ok: false, error: 'Usuario no encontrado' });
+
+    const accountRow = cuenta.rows[0];
+    const accountIdRes = await db.query(`
+      SELECT ka.id
+      FROM users u
+      JOIN kueski_accounts ka ON ka.user_id = u.id
+      WHERE u.email = $1
+    `, [email]);
+    if (accountIdRes.rows[0]?.id) {
+      await syncAccountUsedBalance(db, accountIdRes.rows[0].id);
+      const refreshed = await db.query(`
+        SELECT u.name, u.email,
+               ka.account_number, ka.credit_limit,
+               ka.available_balance, ka.used_balance,
+               ka.credit_score, ka.status
+        FROM users u
+        JOIN kueski_accounts ka ON ka.user_id = u.id
+        WHERE u.email = $1
+      `, [email]);
+      if (refreshed.rows[0]) {
+        cuenta.rows[0] = refreshed.rows[0];
+      }
+    }
 
     const overdueCount = await countOverdueInstallments(db, email);
     const cuentaData = enrichAccountResponse(cuenta.rows[0], overdueCount);
@@ -1085,9 +1123,10 @@ app.post('/api/transacciones', async (req, res) => {
     await client.query(`
       UPDATE kueski_accounts
       SET available_balance = available_balance - $1,
-          used_balance = used_balance + $1, updated_at = NOW()
+          updated_at = NOW()
       WHERE id = $2
     `, [total.toFixed(2), cuenta.id]);
+    await syncAccountUsedBalance(client, cuenta.id);
     await client.query('COMMIT');
     res.status(201).json({
       ok: true,
