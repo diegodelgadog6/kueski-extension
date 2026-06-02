@@ -131,6 +131,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.product?.name && message.product?.price) {
           await chrome.storage.session.set({ activeProduct: message.product });
         }
+        if (message.cart?.total) {
+          await chrome.storage.session.set({ activeCart: message.cart });
+        }
         if (typeof chrome.action.openPopup === 'function') {
           await chrome.action.openPopup();
           sendResponse({ ok: true });
@@ -152,6 +155,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.product?.name && message.product?.price) {
           updates.activeProduct = message.product;
         }
+        if (Object.keys(updates).length > 0) {
+          await chrome.storage.session.set(updates);
+        }
+        sendResponse({ ok: true });
+      } catch (_error) {
+        sendResponse({ ok: false });
+      }
+    })();
+  }
+
+  if (message.type === 'SET_CART_CONTEXT') {
+    (async () => {
+      try {
+        const domain = String(message.domain || '').replace(/^www\./i, '').toLowerCase();
+        const updates = {};
+        if (domain) updates.activeMerchantDomain = domain;
+        if (message.cart?.total) updates.activeCart = message.cart;
         if (Object.keys(updates).length > 0) {
           await chrome.storage.session.set(updates);
         }

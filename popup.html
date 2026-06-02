@@ -129,6 +129,17 @@
             </button>
           </div>
 
+          <div id="home-cart-context" class="home-cart-context hidden">
+            <p class="home-product-label">CARRITO DETECTADO</p>
+            <div class="home-cart-total-row">
+              <span>Total del carrito</span>
+              <strong id="home-cart-total">$0.00</strong>
+            </div>
+            <button class="btn-primary home-cart-pay-btn" data-action="open-checkout-from-product" data-feature="purchases" type="button">
+              Pagar con Kueski Pay
+            </button>
+          </div>
+
           <div id="site-promo-hint" class="site-promo-hint hidden">
             <span class="material-symbols-outlined site-promo-hint-icon">storefront</span>
             <div class="site-promo-hint-copy">
@@ -865,6 +876,15 @@
             <h3 id="checkout-product-name" class="checkout-product-name">Producto</h3>
             <p id="checkout-product-price" class="checkout-product-price">$0.00</p>
             <p id="checkout-product-promo" class="checkout-product-promo"></p>
+          </div>
+
+          <div id="checkout-cart-detected" class="checkout-cart-card hidden">
+            <p class="checkout-product-label">CARRITO DETECTADO</p>
+            <div class="checkout-cart-total-row">
+              <span>Total del carrito</span>
+              <strong id="checkout-cart-total">$0.00</strong>
+            </div>
+            <p id="checkout-cart-promo" class="checkout-product-promo"></p>
           </div>
 
           <div id="checkout-manual-amount" class="form-group">
