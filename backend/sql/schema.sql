@@ -87,6 +87,16 @@ CREATE TABLE IF NOT EXISTS user_transfers (
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS favorite_links (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  url TEXT NOT NULL,
+  product_name VARCHAR(200),
+  price NUMERIC(12,2),
+  store_name VARCHAR(120),
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 INSERT INTO merchants (domain, name, active)
 VALUES
   ('amazon.com.mx', 'Amazon México', TRUE),
