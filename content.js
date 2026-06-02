@@ -126,6 +126,15 @@
   }
 
   function extractProductFromPage() {
+    // Require explicit product-page signals to avoid matching category/home pages.
+    // Category pages have many prices but no product-specific meta or JSON-LD.
+    const hasProductSignal =
+      document.querySelector(
+        'meta[property="product:price:amount"], meta[property="og:price:amount"], meta[property="og:type"][content="product"]'
+      ) || extractFromJsonLd() !== null;
+
+    if (!hasProductSignal) return null;
+
     const name = extractProductName();
     const price = extractProductPrice();
 
@@ -152,6 +161,132 @@
     const product = extractProductFromPage();
     if (product) publishProductContext(product);
     return product;
+  }
+
+  // ===== CART DETECTION =====
+
+  const CART_URL_PATTERNS = [
+    '/cart', '/checkout', '/carrito', '/bolsa', '/bag', '/basket',
+    '/comprar', '/pago', '/gp/cart',
+  ];
+
+  function isCartPage() {
+    const path = window.location.pathname.toLowerCase();
+    return CART_URL_PATTERNS.some((p) => path.includes(p));
+  }
+
+  const ADIDAS_CONFIG = {
+    itemContainer: '.gl-order-summary__item, [class*="order-summary__item"], [class*="order-summary-item"], [class*="checkout-product-card"]',
+    itemName: '.gl-label, [class*="gl-label"], [class*="product-card-description__name"], [class*="product-description-name"], h3',
+    itemPrice: '.gl-price__value, [class*="gl-price__value"], [class*="gl-price-item"]',
+    total: '[class*="order-totals"] .gl-price__value, [class*="order-summary__totals"] .gl-price__value, [class*="gl-order-summary__total"] .gl-price__value',
+  };
+
+  const CART_STORE_CONFIG = {
+    'amazon.com.mx': {
+      itemContainer: '.sc-list-item[data-itemtype="active"], .sc-list-item',
+      itemName: '[data-name], .sc-product-title, .a-truncate-cut, .a-list-item .a-size-medium',
+      itemPrice: '.sc-product-price, .sc-price, .a-price .a-offscreen',
+      total: '#sc-subtotal-amount-activecart, [id*="subtotal-amount"] .a-size-medium',
+    },
+    'liverpool.com.mx': {
+      itemContainer: '.product-line-item, [class*="cartItem"], [class*="cart-item"]',
+      itemName: '[class*="product-name"], [class*="item-name"], .line-item-name',
+      itemPrice: '[class*="price"], .line-item-total-price-amount',
+      total: '[class*="order-total"], [class*="grand-total"], [class*="cart-total"]',
+    },
+    'nike.com': {
+      itemContainer: '[data-testid="product-card"], [data-automation="cart-item"], [class*="cart-item"], li[class*="product"]',
+      itemName: '[data-testid="product-description"], [data-automation="product-description"], [class*="product-description"], [class*="headline"], h5',
+      itemPrice: '.formatted-price',
+      total: null, // Nike uses CSS-in-JS; fall through to max .formatted-price strategy
+    },
+    'adidas.mx': ADIDAS_CONFIG,
+    'adidas.com.mx': ADIDAS_CONFIG,
+  };
+
+  const GENERIC_TOTAL_SELECTORS = [
+    '[class*="order-total"] [class*="amount"]',
+    '[class*="cart-total"] [class*="price"]',
+    '[class*="grand-total"]',
+    '[class*="total-amount"]',
+    '[class*="checkout-total"]',
+    '[class*="subtotal"]',
+    '[id*="total"]',
+  ];
+
+  function extractCartTotal() {
+    const config = CART_STORE_CONFIG[currentDomain];
+
+    const storeSels = config?.total
+      ? config.total.split(', ').map((s) => s.trim())
+      : [];
+
+    for (const sel of [...storeSels, ...GENERIC_TOTAL_SELECTORS]) {
+      const els = document.querySelectorAll(sel);
+      if (!els.length) continue;
+      // Take the last match — grand total is always the last row in checkout summary sections
+      const val = parsePriceValue(els[els.length - 1]?.textContent);
+      if (val && val > 0) return val;
+    }
+
+    // Last-resort pass 1: known price class names (Nike .formatted-price, Adidas Glass .gl-price__value)
+    const knownPriceEls = [
+      ...document.querySelectorAll('.formatted-price'),
+      ...document.querySelectorAll('.gl-price__value, [class*="gl-price__value"]'),
+    ];
+    if (knownPriceEls.length) {
+      const values = knownPriceEls
+        .map((el) => parsePriceValue(el.textContent))
+        .filter((v) => v != null && v > 0);
+      if (values.length) {
+        const max = Math.max(...values);
+        if (max > 0) return max;
+      }
+    }
+
+    // Last-resort pass 2: class-agnostic leaf scan.
+    // Find every leaf element (no children) whose ENTIRE text content is a price string.
+    // The cart grand total is always the largest such value on the cart page.
+    const leafEls = document.querySelectorAll('span, strong, b, p, div');
+    const leafValues = [];
+    for (const el of leafEls) {
+      if (el.children.length > 0) continue;
+      const text = el.textContent.trim();
+      if (!/^\$?\s*[\d]{1,3}(?:[,.][\d]{3})*(?:[.,]\d{2})?$/.test(text)) continue;
+      const val = parsePriceValue(text);
+      if (val && val > 0) leafValues.push(val);
+    }
+    if (leafValues.length) {
+      const max = Math.max(...leafValues);
+      if (max > 0) return max;
+    }
+
+    return null;
+  }
+
+  function extractCartFromPage() {
+    if (!isCartPage()) return null;
+
+    const total = extractCartTotal();
+    if (!total) return null;
+
+    return { total, domain: currentDomain, detectedAt: Date.now() };
+  }
+
+  function publishCartContext(cart) {
+    if (!cart?.total) return;
+    chrome.runtime.sendMessage({
+      type: 'SET_CART_CONTEXT',
+      domain: currentDomain,
+      cart,
+    });
+  }
+
+  function scanAndPublishCart() {
+    const cart = extractCartFromPage();
+    if (cart) publishCartContext(cart);
+    return cart;
   }
 
   const HEADER_SELECTORS = [
@@ -269,10 +404,11 @@
 
   function wireBannerEvents(banner, merchant) {
     banner.querySelector('#kueski-pay-btn')?.addEventListener('click', () => {
-      const product = scanAndPublishProduct();
+      const product = isCartPage() ? null : scanAndPublishProduct();
+      const cart = scanAndPublishCart();
 
       chrome.runtime.sendMessage(
-        { type: 'OPEN_POPUP', domain: currentDomain, product },
+        { type: 'OPEN_POPUP', domain: currentDomain, product, cart },
         (response) => {
           if (response && response.ok) return;
 
@@ -379,7 +515,8 @@
       const dismissed = await isBannerDismissed(currentDomain);
       if (dismissed) return;
 
-      scanAndPublishProduct();
+      if (!isCartPage()) scanAndPublishProduct();
+      scanAndPublishCart();
       initKueskiBanner(response.merchant);
       chrome.runtime.sendMessage({
         type: 'LOG_ACTIVITY',
@@ -392,7 +529,12 @@
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === 'GET_PRODUCT_CONTEXT') {
-      sendResponse({ product: scanAndPublishProduct() });
+      // Never return a product on cart pages — it would pick up page titles like "Bag"
+      sendResponse({ product: isCartPage() ? null : scanAndPublishProduct() });
+      return true;
+    }
+    if (message.type === 'GET_CART_CONTEXT') {
+      sendResponse({ cart: scanAndPublishCart() });
       return true;
     }
     return false;

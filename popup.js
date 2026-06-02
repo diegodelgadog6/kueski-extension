@@ -62,6 +62,21 @@ function isCheckoutPageUrl(url) {
   }
 }
 
+const CART_URL_PATTERNS_POPUP = [
+  '/cart', '/checkout', '/carrito', '/bolsa', '/bag', '/basket',
+  '/comprar', '/pago', '/gp/cart',
+];
+
+function isCartPageUrl(url) {
+  if (!url) return false;
+  try {
+    const path = new URL(url).pathname.toLowerCase();
+    return CART_URL_PATTERNS_POPUP.some((p) => path.includes(p));
+  } catch (_err) {
+    return false;
+  }
+}
+
 async function resolveActivePageDomain() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -76,9 +91,33 @@ async function resolveActivePageDomain() {
   return stored.activeMerchantDomain?.replace(/^www\./i, '') || null;
 }
 
+async function resolveActiveCart() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id && isCheckoutPageUrl(tab.url)) {
+      const response = await chrome.tabs.sendMessage(tab.id, { type: 'GET_CART_CONTEXT' });
+      if (response?.cart?.total) {
+        await chrome.storage.session.set({ activeCart: response.cart });
+        return response.cart;
+      }
+    }
+  } catch (_err) {
+    // Content script may be unavailable on some pages.
+  }
+
+  const stored = await chrome.storage.session.get(['activeCart', 'activeMerchantDomain']);
+  const cart = stored.activeCart;
+  const currentDomain = stored.activeMerchantDomain;
+  // Domain-check: never return a cart from a different store (e.g. Nike cart shown on Adidas)
+  if (cart?.total && currentDomain && cart.domain === currentDomain) return cart;
+  return null;
+}
+
 async function resolveActiveProduct() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    // Never return a product when on a cart/checkout page
+    if (tab?.url && isCartPageUrl(tab.url)) return null;
     if (tab?.id && isCheckoutPageUrl(tab.url)) {
       const response = await chrome.tabs.sendMessage(tab.id, { type: 'GET_PRODUCT_CONTEXT' });
       if (response?.product?.name && response?.product?.price) {
@@ -89,6 +128,12 @@ async function resolveActiveProduct() {
   } catch (_err) {
     // Content script may be unavailable on some pages.
   }
+
+  // Guard stale session data: don't return a stored product if we're on a cart page
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.url && isCartPageUrl(tab.url)) return null;
+  } catch (_err) {}
 
   const stored = await chrome.storage.session.get(['activeProduct']);
   return stored.activeProduct?.name && stored.activeProduct?.price
@@ -142,6 +187,32 @@ async function buildProductPromoHint(amount, domain, merchantData) {
   }
 }
 
+function applyCheckoutCartUI(cart, merchantData) {
+  const cartCard = document.getElementById('checkout-cart-detected');
+  const detectedCard = document.getElementById('checkout-product-detected');
+  const manualBlock = document.getElementById('checkout-manual-amount');
+  const amountInput = document.getElementById('checkout-amount');
+  const couponInfo = document.getElementById('checkout-coupon-info');
+
+  if (!cart?.total) {
+    cartCard?.classList.add('hidden');
+    return;
+  }
+
+  cartCard?.classList.remove('hidden');
+  detectedCard?.classList.add('hidden');
+  manualBlock?.classList.add('hidden');
+  if (couponInfo) couponInfo.style.display = 'none';
+
+  document.getElementById('checkout-cart-total').textContent = formatBalanceAmount(cart.total);
+  if (amountInput) amountInput.value = cart.total;
+
+  buildProductPromoHint(cart.total, checkoutState.domain, merchantData).then((promo) => {
+    const promoEl = document.getElementById('checkout-cart-promo');
+    if (promoEl) promoEl.textContent = promo;
+  });
+}
+
 function applyCheckoutProductUI(product, merchantData) {
   const detectedCard = document.getElementById('checkout-product-detected');
   const manualBlock = document.getElementById('checkout-manual-amount');
@@ -169,15 +240,36 @@ function applyCheckoutProductUI(product, merchantData) {
   }
 }
 
+function applyHomeCartUI(cart) {
+  const cartCard = document.getElementById('home-cart-context');
+  if (!cartCard || !cart?.total) return;
+  const totalEl = document.getElementById('home-cart-total');
+  if (totalEl) totalEl.textContent = formatBalanceAmount(cart.total);
+  cartCard.classList.remove('hidden');
+}
+
 async function loadProductContext(isAffiliated = true) {
   const card = document.getElementById('home-product-context');
+  const cartCard = document.getElementById('home-cart-context');
   const discountCard = document.querySelector('.discount-card');
   if (!card) return;
 
   if (!isAffiliated) {
     card.classList.add('hidden');
+    cartCard?.classList.add('hidden');
     return;
   }
+
+  // On cart pages show cart card instead of product card
+  const cart = await resolveActiveCart();
+  if (cart?.total) {
+    card.classList.add('hidden');
+    if (discountCard) discountCard.classList.add('hidden');
+    applyHomeCartUI(cart);
+    return;
+  }
+
+  cartCard?.classList.add('hidden');
 
   const product = await resolveActiveProduct();
   if (!product) {
@@ -1997,7 +2089,8 @@ async function openCheckout() {
 
     if (!data.affiliated) return;
 
-    const product = await resolveActiveProduct();
+    const cart = await resolveActiveCart();
+    const product = cart ? null : await resolveActiveProduct();
 
     // Save for use when confirming transaction
     checkoutState.domain = domain;
@@ -2010,7 +2103,11 @@ async function openCheckout() {
     document.getElementById('checkout-coupon-code').textContent = data.merchant.coupon;
     document.getElementById('checkout-coupon-discount').textContent = data.merchant.discount;
 
-    applyCheckoutProductUI(product, data.merchant);
+    if (cart) {
+      applyCheckoutCartUI(cart, data.merchant);
+    } else {
+      applyCheckoutProductUI(product, data.merchant);
+    }
 
     // Reset to step 1 in case user opened it before
     document.getElementById('checkout-step-1').style.display = 'block';
