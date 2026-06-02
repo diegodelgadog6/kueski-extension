@@ -117,6 +117,9 @@
             <h2 class="discount-amount">20% Descuento</h2>
             <p class="discount-desc">Oferta exclusiva en tu próxima compra en tiendas afiliadas.</p>
             <div class="discount-cta">Pagar con Kueski Pay <span class="material-symbols-outlined">arrow_forward</span></div>
+            <button class="btn-save-favorite" data-action="save-favorite" type="button">
+              <span class="material-symbols-outlined tiny">bookmark_add</span> Guardar página
+            </button>
           </div>
 
           <div id="home-product-context" class="home-product-context hidden">
@@ -126,6 +129,9 @@
             <p id="home-product-promo" class="home-product-promo"></p>
             <button class="btn-primary home-product-pay-btn" data-action="open-checkout-from-product" data-feature="purchases" type="button">
               Pagar con Kueski Pay
+            </button>
+            <button class="btn-save-favorite" data-action="save-favorite" type="button">
+              <span class="material-symbols-outlined tiny">bookmark_add</span> Guardar en favoritos
             </button>
           </div>
 
@@ -137,6 +143,9 @@
             </div>
             <button class="btn-primary home-cart-pay-btn" data-action="open-checkout-from-product" data-feature="purchases" type="button">
               Pagar con Kueski Pay
+            </button>
+            <button class="btn-save-favorite" data-action="save-favorite" type="button">
+              <span class="material-symbols-outlined tiny">bookmark_add</span> Guardar en favoritos
             </button>
           </div>
 
@@ -218,6 +227,13 @@
               </div>
             </div>
           </div>
+
+          <!-- Favorites Section -->
+          <div class="section-header hidden" id="favorites-section-header">
+            <span class="section-label">MIS FAVORITOS</span>
+            <span class="section-link" data-action="ver-todos-favoritos">Ver todos</span>
+          </div>
+          <div class="favorites-scroll hidden" id="favorites-scroll"></div>
         </div>
 
         <!-- ===== STORES TAB ===== -->
@@ -915,6 +931,19 @@
           <p id="checkout-success-msg" style="color:#3d4f6f;font-size:14px;margin-bottom:16px"></p>
           <button class="btn-primary" data-action="close-checkout">Ver actividad</button>
         </div>
+      </div>
+    </div>
+
+    <!-- ==================== ALL FAVORITES OVERLAY ==================== -->
+    <div id="all-favorites-overlay" class="overlay hidden">
+      <div class="overlay-card">
+        <div class="overlay-header">
+          <h2 class="reminders-title">Mis favoritos guardados</h2>
+          <button class="icon-btn" data-action="close-all-favorites">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div id="all-favorites-list" class="all-favorites-list"></div>
       </div>
     </div>
 

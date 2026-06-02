@@ -669,6 +669,7 @@ async function loadAccountData() {
   loadCurrentSiteCoupon();
   updateRemindersIndicator();
   loadTierStoreOffers();
+  loadFavorites();
 }
 
 async function updateRemindersIndicator() {
@@ -1828,6 +1829,234 @@ async function submitKueskiCashLoan() {
   }
 }
 
+// ===== FAVORITE LINKS =====
+function getStoreMetaByName(storeName) {
+  const lower = String(storeName || '').toLowerCase();
+  for (const meta of Object.values(STORE_META)) {
+    if (meta.slug && lower.includes(meta.slug.toLowerCase())) return meta;
+  }
+  return null;
+}
+
+function renderFavoriteCard(fav) {
+  const storeName = fav.store_name || 'Tienda';
+  const productName = fav.product_name || 'Producto guardado';
+  const price = fav.price ? formatBalanceAmount(parseFloat(fav.price)) : '';
+  const meta = getStoreMetaByName(storeName);
+
+  const iconHtml = meta?.logo
+    ? `<div class="fav-card-icon"><img src="${escapeHtmlAttr(meta.logo)}" alt="" class="store-logo-img"></div>`
+    : `<div class="fav-card-icon fav-card-icon-text">${escapeHtmlAttr(storeName.charAt(0).toUpperCase())}</div>`;
+
+  return `
+    <div class="fav-card">
+      ${iconHtml}
+      <div class="fav-card-info">
+        <span class="fav-card-store">${escapeHtmlAttr(storeName)}</span>
+        <strong class="fav-card-name">${escapeHtmlAttr(productName)}</strong>
+        ${price ? `<span class="fav-card-price">${price}</span>` : ''}
+      </div>
+      <div class="fav-card-actions">
+        <button class="fav-card-visit" data-action="visit-favorite"
+          data-url="${escapeHtmlAttr(fav.url)}" type="button">
+          <span class="material-symbols-outlined tiny">open_in_new</span> Visitar
+        </button>
+        <button class="fav-card-delete" data-action="delete-favorite"
+          data-id="${escapeHtmlAttr(String(fav.id))}" type="button">
+          <span class="material-symbols-outlined tiny">delete</span>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+async function loadFavorites() {
+  if (!currentUserEmail) return;
+
+  const header = document.getElementById('favorites-section-header');
+  const scroll = document.getElementById('favorites-scroll');
+  if (!header || !scroll) return;
+
+  try {
+    const res = await fetch(
+      `http://localhost:3000/api/favoritos?email=${encodeURIComponent(currentUserEmail)}`
+    );
+    const data = await res.json();
+
+    if (!data.ok || !Array.isArray(data.favoritos) || data.favoritos.length === 0) {
+      header.classList.add('hidden');
+      scroll.classList.add('hidden');
+      return;
+    }
+
+    header.classList.remove('hidden');
+    scroll.classList.remove('hidden');
+    scroll.innerHTML = data.favoritos.map(renderFavoriteCard).join('');
+  } catch (err) {
+    console.error('Error loading favorites:', err);
+  }
+}
+
+async function saveFavorite() {
+  if (!currentUserEmail) {
+    alert('Inicia sesión para guardar favoritos');
+    return;
+  }
+
+  document.querySelectorAll('[data-action="save-favorite"]').forEach((b) => { b.disabled = true; });
+
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const url = tab?.url || '';
+    if (!url || url.startsWith('chrome://') || url.startsWith('chrome-extension://')) {
+      alert('No se puede guardar esta página');
+      return;
+    }
+
+    const product = await resolveActiveProduct();
+    const domain = await resolveActivePageDomain();
+
+    let storeName = null;
+    if (domain) {
+      const emailParam = currentUserEmail ? `&email=${encodeURIComponent(currentUserEmail)}` : '';
+      try {
+        const r = await fetch(`http://localhost:3000/api/merchants/check?domain=${domain}${emailParam}`);
+        const d = await r.json();
+        if (d.affiliated) storeName = d.merchant.name;
+      } catch (_) {}
+    }
+
+    const res = await fetch('http://localhost:3000/api/favoritos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: currentUserEmail,
+        url,
+        product_name: product?.name || tab?.title || null,
+        price: product?.price || null,
+        store_name: storeName,
+      }),
+    });
+    const data = await res.json();
+
+    if (!data.ok) {
+      alert(data.error || 'No se pudo guardar el favorito');
+      return;
+    }
+
+    loadFavorites();
+
+    document.querySelectorAll('[data-action="save-favorite"]').forEach((b) => {
+      const original = b.innerHTML;
+      b.innerHTML = '<span class="material-symbols-outlined tiny">check</span> ¡Guardado!';
+      setTimeout(() => { b.innerHTML = original; }, 1500);
+    });
+  } catch (err) {
+    console.error('Error saving favorite:', err);
+    alert('Error al guardar el favorito');
+  } finally {
+    document.querySelectorAll('[data-action="save-favorite"]').forEach((b) => { b.disabled = false; });
+  }
+}
+
+async function deleteFavorite(id) {
+  if (!currentUserEmail || !id) return;
+
+  try {
+    const res = await fetch(`http://localhost:3000/api/favoritos/${id}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: currentUserEmail }),
+    });
+    const data = await res.json();
+
+    if (!data.ok) {
+      alert(data.error || 'No se pudo eliminar el favorito');
+      return;
+    }
+
+    loadFavorites();
+    reloadAllFavoritesIfOpen();
+  } catch (err) {
+    console.error('Error deleting favorite:', err);
+  }
+}
+
+function renderFavoriteListRow(fav) {
+  const storeName = fav.store_name || 'Tienda';
+  const productName = fav.product_name || 'Producto guardado';
+  const price = fav.price ? formatBalanceAmount(parseFloat(fav.price)) : '';
+  const meta = getStoreMetaByName(storeName);
+
+  const iconHtml = meta?.logo
+    ? `<div class="store-row-icon"><img src="${escapeHtmlAttr(meta.logo)}" alt="" class="store-logo-img"></div>`
+    : `<div class="store-row-icon fav-card-icon-text">${escapeHtmlAttr(storeName.charAt(0).toUpperCase())}</div>`;
+
+  return `
+    <div class="fav-list-row">
+      ${iconHtml}
+      <div class="fav-list-info">
+        <strong>${escapeHtmlAttr(productName)}</strong>
+        <span>${escapeHtmlAttr(storeName)}${price ? ` · ${price}` : ''}</span>
+      </div>
+      <div class="fav-list-actions">
+        <button class="fav-card-visit" data-action="visit-favorite"
+          data-url="${escapeHtmlAttr(fav.url)}" type="button">
+          <span class="material-symbols-outlined tiny">open_in_new</span>
+        </button>
+        <button class="fav-card-delete" data-action="delete-favorite"
+          data-id="${escapeHtmlAttr(String(fav.id))}" type="button">
+          <span class="material-symbols-outlined tiny">delete</span>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+async function loadAllFavoritesIntoOverlay() {
+  const list = document.getElementById('all-favorites-list');
+  if (!list || !currentUserEmail) return;
+
+  list.innerHTML = '<p class="reminders-empty">Cargando...</p>';
+
+  try {
+    const res = await fetch(
+      `http://localhost:3000/api/favoritos?email=${encodeURIComponent(currentUserEmail)}`
+    );
+    const data = await res.json();
+
+    if (!data.ok || !Array.isArray(data.favoritos) || data.favoritos.length === 0) {
+      list.innerHTML = '<p class="reminders-empty">No tienes favoritos guardados aún. Visita una tienda afiliada y guarda productos para verlos aquí.</p>';
+      return;
+    }
+
+    list.innerHTML = data.favoritos.map(renderFavoriteListRow).join('');
+  } catch (err) {
+    console.error('Error loading all favorites:', err);
+    list.innerHTML = '<p class="reminders-empty">No se pudo conectar al servidor</p>';
+  }
+}
+
+function reloadAllFavoritesIfOpen() {
+  const overlay = document.getElementById('all-favorites-overlay');
+  if (!overlay || overlay.classList.contains('hidden')) return;
+  loadAllFavoritesIntoOverlay();
+}
+
+function openAllFavorites() {
+  document.getElementById('all-favorites-overlay').classList.remove('hidden');
+  loadAllFavoritesIntoOverlay();
+}
+
+function closeAllFavorites() {
+  document.getElementById('all-favorites-overlay').classList.add('hidden');
+}
+
+function visitFavorite(url) {
+  if (!url) return;
+  chrome.tabs.create({ url });
+}
+
 // ===== CATEGORY CHIP TOGGLE =====
 document.addEventListener("DOMContentLoaded", () => {
   document.addEventListener("click", (e) => {
@@ -1990,7 +2219,23 @@ document.addEventListener("DOMContentLoaded", () => {
       case 'demo-loan':
         openKueskiCashLoan();
         break;
-              
+
+      case 'save-favorite':
+        saveFavorite();
+        break;
+      case 'delete-favorite':
+        deleteFavorite(actionEl.dataset.id);
+        break;
+      case 'visit-favorite':
+        visitFavorite(actionEl.dataset.url);
+        break;
+      case 'ver-todos-favoritos':
+        openAllFavorites();
+        break;
+      case 'close-all-favorites':
+        closeAllFavorites();
+        break;
+
       default:
         break;
     }
@@ -2253,4 +2498,7 @@ document.addEventListener("click", (e) => {
 
   const deleteAccountOverlay = document.getElementById("delete-account-overlay");
   if (e.target === deleteAccountOverlay) closeDeleteAccount();
+
+  const allFavoritesOverlay = document.getElementById("all-favorites-overlay");
+  if (e.target === allFavoritesOverlay) closeAllFavorites();
 });

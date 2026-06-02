@@ -1226,6 +1226,85 @@ app.delete('/api/cuenta', async (req, res) => {
 
 
 
+// ===== FAVORITE LINKS =====
+app.get('/api/favoritos', async (req, res) => {
+  const { email } = req.query;
+  if (!email) return res.status(400).json({ ok: false, error: 'email requerido' });
+
+  try {
+    const result = await db.query(`
+      SELECT fl.id, fl.url, fl.product_name, fl.price, fl.store_name, fl.created_at
+      FROM favorite_links fl
+      JOIN users u ON u.id = fl.user_id
+      WHERE LOWER(u.email) = LOWER($1)
+      ORDER BY fl.created_at DESC
+    `, [email]);
+
+    res.json({ ok: true, favoritos: result.rows });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/favoritos', async (req, res) => {
+  const { email, url, product_name, price, store_name } = req.body || {};
+
+  if (!email || !url) {
+    return res.status(400).json({ ok: false, error: 'email y url son requeridos' });
+  }
+
+  try {
+    const userRes = await db.query(
+      'SELECT id FROM users WHERE LOWER(email) = LOWER($1)',
+      [email]
+    );
+
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ ok: false, error: 'Usuario no encontrado' });
+    }
+
+    const userId = userRes.rows[0].id;
+    const parsedPrice = price != null && !Number.isNaN(parseFloat(price)) ? parseFloat(price) : null;
+
+    const result = await db.query(`
+      INSERT INTO favorite_links (user_id, url, product_name, price, store_name)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING id, url, product_name, price, store_name, created_at
+    `, [userId, url, product_name || null, parsedPrice, store_name || null]);
+
+    res.status(201).json({ ok: true, favorito: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.delete('/api/favoritos/:id', async (req, res) => {
+  const { email } = req.body || {};
+  const id = parseInt(req.params.id, 10);
+
+  if (!email) return res.status(400).json({ ok: false, error: 'email requerido' });
+  if (!id) return res.status(400).json({ ok: false, error: 'id inválido' });
+
+  try {
+    const result = await db.query(`
+      DELETE FROM favorite_links fl
+      USING users u
+      WHERE fl.id = $1
+        AND fl.user_id = u.id
+        AND LOWER(u.email) = LOWER($2)
+      RETURNING fl.id
+    `, [id, email]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ ok: false, error: 'Favorito no encontrado' });
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 async function ensureTransferSchema() {
   await db.query(`
     CREATE TABLE IF NOT EXISTS user_transfers (
@@ -1239,6 +1318,18 @@ async function ensureTransferSchema() {
 
   await db.query(`
     ALTER TABLE users ADD COLUMN IF NOT EXISTS password VARCHAR(120)
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS favorite_links (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      url TEXT NOT NULL,
+      product_name VARCHAR(200),
+      price NUMERIC(12,2),
+      store_name VARCHAR(120),
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )
   `);
 
   await ensureDemoUsers(db);
