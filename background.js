@@ -131,7 +131,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.product?.name && message.product?.price) {
           await chrome.storage.session.set({ activeProduct: message.product });
         }
-        if (message.cart?.total) {
+        if (message.cart?.empty) {
+          await chrome.storage.session.remove(['activeCart']);
+        } else if (message.cart?.total) {
           await chrome.storage.session.set({ activeCart: message.cart });
         }
         if (typeof chrome.action.openPopup === 'function') {
@@ -171,9 +173,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const domain = String(message.domain || '').replace(/^www\./i, '').toLowerCase();
         const updates = {};
         if (domain) updates.activeMerchantDomain = domain;
-        if (message.cart?.total) updates.activeCart = message.cart;
         if (Object.keys(updates).length > 0) {
           await chrome.storage.session.set(updates);
+        }
+        // An emptied cart must drop any stale stored cart so the popup reflects it.
+        if (message.cart?.empty) {
+          await chrome.storage.session.remove(['activeCart']);
+        } else if (message.cart?.total) {
+          await chrome.storage.session.set({ activeCart: message.cart });
         }
         sendResponse({ ok: true });
       } catch (_error) {

@@ -96,9 +96,16 @@ async function resolveActiveCart() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id && isCheckoutPageUrl(tab.url)) {
       const response = await chrome.tabs.sendMessage(tab.id, { type: 'GET_CART_CONTEXT' });
-      if (response?.cart?.total) {
-        await chrome.storage.session.set({ activeCart: response.cart });
-        return response.cart;
+      const liveCart = response?.cart;
+      // Cart was emptied on the page — drop the stale stored cart and show nothing.
+      if (liveCart?.empty) {
+        await chrome.storage.session.remove(['activeCart']);
+        return null;
+      }
+      // Live scan found a cart — it's the source of truth (reflects added/removed items).
+      if (liveCart?.total) {
+        await chrome.storage.session.set({ activeCart: liveCart });
+        return liveCart;
       }
     }
   } catch (_err) {
@@ -204,6 +211,8 @@ function applyCheckoutCartUI(cart, merchantData) {
   manualBlock?.classList.add('hidden');
   if (couponInfo) couponInfo.style.display = 'none';
 
+  const countEl = document.getElementById('checkout-cart-count');
+  if (countEl) countEl.textContent = formatCartItemsLabel(cart.itemCount);
   document.getElementById('checkout-cart-total').textContent = formatBalanceAmount(cart.total);
   if (amountInput) amountInput.value = cart.total;
 
@@ -240,11 +249,18 @@ function applyCheckoutProductUI(product, merchantData) {
   }
 }
 
+function formatCartItemsLabel(itemCount) {
+  if (!itemCount || itemCount < 1) return 'Total del carrito';
+  return itemCount === 1 ? '1 artículo' : `${itemCount} artículos`;
+}
+
 function applyHomeCartUI(cart) {
   const cartCard = document.getElementById('home-cart-context');
   if (!cartCard || !cart?.total) return;
   const totalEl = document.getElementById('home-cart-total');
   if (totalEl) totalEl.textContent = formatBalanceAmount(cart.total);
+  const countEl = document.getElementById('home-cart-count');
+  if (countEl) countEl.textContent = formatCartItemsLabel(cart.itemCount);
   cartCard.classList.remove('hidden');
 }
 
@@ -260,33 +276,35 @@ async function loadProductContext(isAffiliated = true) {
     return;
   }
 
-  // On cart pages show cart card instead of product card
+  // Resolve both: the cart persists across the store, the product is the page
+  // currently being viewed. Both can be offered at the same time.
   const cart = await resolveActiveCart();
-  if (cart?.total) {
-    card.classList.add('hidden');
-    if (discountCard) discountCard.classList.add('hidden');
-    applyHomeCartUI(cart);
-    return;
-  }
-
-  cartCard?.classList.add('hidden');
-
   const product = await resolveActiveProduct();
-  if (!product) {
-    card.classList.add('hidden');
-    if (discountCard) discountCard.classList.remove('hidden');
-    return;
+
+  // Cart card — shown whenever there's a non-empty cart for this store.
+  if (cart?.total) {
+    applyHomeCartUI(cart);
+  } else {
+    cartCard?.classList.add('hidden');
   }
 
-  if (discountCard) discountCard.classList.add('hidden');
+  // Product card — shown when viewing a single product page.
+  if (product) {
+    const domain = await resolveActivePageDomain();
+    const promo = await buildProductPromoHint(product.price, domain);
+    document.getElementById('home-product-name').textContent = product.name;
+    document.getElementById('home-product-price').textContent = formatBalanceAmount(product.price);
+    const promoEl = document.getElementById('home-product-promo');
+    if (promoEl) promoEl.textContent = promo;
+    card.classList.remove('hidden');
+  } else {
+    card.classList.add('hidden');
+  }
 
-  const domain = await resolveActivePageDomain();
-  const promo = await buildProductPromoHint(product.price, domain);
-  document.getElementById('home-product-name').textContent = product.name;
-  document.getElementById('home-product-price').textContent = formatBalanceAmount(product.price);
-  const promoEl = document.getElementById('home-product-promo');
-  if (promoEl) promoEl.textContent = promo;
-  card.classList.remove('hidden');
+  // Site promo only when there's nothing actionable to show.
+  if (discountCard) {
+    discountCard.classList.toggle('hidden', Boolean(product) || Boolean(cart?.total));
+  }
 }
 
 function renderCouponMini(store) {
@@ -2172,7 +2190,7 @@ document.addEventListener("DOMContentLoaded", () => {
         break;
 
       case 'open-checkout-from-product':
-        openCheckout();
+        openCheckout(actionEl.dataset.checkoutMode || 'auto');
         break;
 
       // Hide checkout overlay and refresh balance
@@ -2318,7 +2336,7 @@ let checkoutState = {
 };
 
 //  Open Kueski Pay Checkout Step 1
-async function openCheckout() {
+async function openCheckout(mode = 'auto') {
   if (!ensureFeatureAccess('purchases', 'Las compras con Kueski Pay están bloqueadas por pagos vencidos o crédito limitado.')) {
     return;
   }
@@ -2334,8 +2352,20 @@ async function openCheckout() {
 
     if (!data.affiliated) return;
 
-    const cart = await resolveActiveCart();
-    const product = cart ? null : await resolveActiveProduct();
+    let cart = await resolveActiveCart();
+    let product = await resolveActiveProduct();
+
+    // Decide what to charge based on which button opened the checkout:
+    //  - 'product' → pay only the product being viewed
+    //  - 'cart'    → pay the whole cart
+    //  - 'auto'    → prefer the cart when one exists
+    if (mode === 'product') {
+      cart = null;
+    } else if (mode === 'cart') {
+      product = null;
+    } else if (cart) {
+      product = null;
+    }
 
     // Save for use when confirming transaction
     checkoutState.domain = domain;

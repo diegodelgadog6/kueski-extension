@@ -61,6 +61,48 @@
     return null;
   }
 
+  // Store-specific product-page selectors. Many sites (Nike, Adidas, Zara…) use
+  // obfuscated CSS-in-JS class names, so we target their stable data-testid/id hooks.
+  const PRODUCT_STORE_CONFIG = {
+    'nike.com': {
+      name: '#pdp_product_title, [data-testid="product_title"], [data-testid="product-title"]',
+      price: '[data-testid="currentPrice-container"], [data-testid="OfferPrice"], [data-testid="initialPrice-container"], [data-testid="product-price"]',
+    },
+    'liverpool.com.mx': {
+      name: '[data-testid="pdp-title"], h1[class*="product-name"], h1[class*="a-product-name"]',
+      price: '[data-testid="pdp-price"], [class*="m-final-price"], [class*="a-price"], [itemprop="price"]',
+    },
+    'adidas.mx': {
+      name: '[data-testid="product-title"], h1[class*="name"]',
+      price: '[data-testid="product-price"], .gl-price-item--sale, .gl-price-item, [class*="gl-price-item"]',
+    },
+    'zara.com': {
+      name: '[data-qa-qualifier="product-detail-info-name"], h1.product-detail-info__header-name',
+      price: '[data-qa-qualifier="price-amount-current"], .price__amount-current, .money-amount__main',
+    },
+  };
+
+  function firstTextFromSelectors(selectorString) {
+    if (!selectorString) return null;
+    for (const sel of selectorString.split(',').map((s) => s.trim()).filter(Boolean)) {
+      const el = document.querySelector(sel);
+      const text = el?.getAttribute('content') || el?.textContent;
+      if (text && text.trim()) return text.trim();
+    }
+    return null;
+  }
+
+  function firstPriceFromSelectors(selectorString) {
+    if (!selectorString) return null;
+    for (const sel of selectorString.split(',').map((s) => s.trim()).filter(Boolean)) {
+      for (const el of document.querySelectorAll(sel)) {
+        const value = parsePriceValue(el.getAttribute('content') || el.textContent);
+        if (value) return value;
+      }
+    }
+    return null;
+  }
+
   function extractProductName() {
     const ogTitle = document.querySelector('meta[property="og:title"]')?.content;
     if (ogTitle) {
@@ -70,6 +112,9 @@
 
     const jsonLd = extractFromJsonLd();
     if (jsonLd?.name) return jsonLd.name;
+
+    const storeName = firstTextFromSelectors(PRODUCT_STORE_CONFIG[currentDomain]?.name);
+    if (storeName && storeName.length > 2) return cleanProductName(storeName);
 
     const selectors = [
       'h1[data-testid*="product"]',
@@ -93,6 +138,33 @@
     return document.title ? cleanProductName(document.title) : null;
   }
 
+  const PRICE_ONLY_TEXT_RE = /^\$?\s*\d{1,3}(?:[,.]\d{3})*(?:[.,]\d{2})?\s*(?:MXN|mxn|m\.?n\.?)?$/;
+
+  function isNodeVisible(el) {
+    if (!el || !el.getBoundingClientRect) return false;
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    const style = getComputedStyle(el);
+    return style.visibility !== 'hidden' && style.display !== 'none' && style.opacity !== '0';
+  }
+
+  // Last-resort: scan the page for the first visible element whose text is exactly a
+  // price, skipping the header/nav and our own banner. On a product detail page this
+  // is reliably the main product price even when class names are obfuscated.
+  function extractVisibleProductPrice() {
+    const nodes = document.querySelectorAll('span, strong, b, p, div, ins, bdi, h2, h3');
+    for (const el of nodes) {
+      if (el.children.length > 0) continue;
+      if (el.closest('#kueski-banner, header, nav, footer')) continue;
+      const text = el.textContent.trim();
+      if (!PRICE_ONLY_TEXT_RE.test(text)) continue;
+      if (!isNodeVisible(el)) continue;
+      const value = parsePriceValue(text);
+      if (value) return value;
+    }
+    return null;
+  }
+
   function extractProductPrice() {
     const jsonLd = extractFromJsonLd();
     if (jsonLd?.price) return jsonLd.price;
@@ -103,12 +175,16 @@
     const metaParsed = parsePriceValue(metaPrice);
     if (metaParsed) return metaParsed;
 
+    const storePrice = firstPriceFromSelectors(PRODUCT_STORE_CONFIG[currentDomain]?.price);
+    if (storePrice) return storePrice;
+
     const priceSelectors = [
       '[itemprop="price"]',
-      '[data-test="product-price"]',
-      '[data-testid*="price"]',
-      '[class*="price"] [class*="current"]',
-      '[class*="Price"]',
+      '[data-test*="product-price" i]',
+      '[data-testid*="price" i]',
+      '[class*="current-price" i]',
+      '[class*="product-price" i]',
+      '[class*="price" i] [class*="current" i]',
       '.a-price .a-offscreen',
       '.product-price',
       '#priceblock_ourprice',
@@ -117,21 +193,44 @@
     ];
 
     for (const selector of priceSelectors) {
-      const el = document.querySelector(selector);
-      const value = parsePriceValue(el?.getAttribute('content') || el?.textContent);
-      if (value) return value;
+      for (const el of document.querySelectorAll(selector)) {
+        const value = parsePriceValue(el.getAttribute('content') || el.textContent);
+        if (value) return value;
+      }
     }
 
-    return null;
+    return extractVisibleProductPrice();
+  }
+
+  // URL patterns that strongly indicate a single product detail page.
+  const PRODUCT_URL_PATTERNS = [
+    '/dp/', '/gp/product/', '/ip/', '/product/', '/producto/',
+    '/p/', '/pd/', '/prod/', '-p-', '/item/', '/itm/', '/t/',
+  ];
+
+  function urlLooksLikeProduct() {
+    const path = window.location.pathname.toLowerCase();
+    return PRODUCT_URL_PATTERNS.some((p) => path.includes(p));
+  }
+
+  function hasProductMicrodata() {
+    return Boolean(document.querySelector('[itemtype*="/Product" i]'));
   }
 
   function extractProductFromPage() {
-    // Require explicit product-page signals to avoid matching category/home pages.
-    // Category pages have many prices but no product-specific meta or JSON-LD.
+    // Never treat a cart/checkout page as a product page.
+    if (isCartPage()) return null;
+
+    // Require a product-page signal to avoid matching category/home pages, but
+    // accept a broad set of signals so real product pages are auto-detected
+    // (meta tags, JSON-LD, microdata, or a product-style URL).
     const hasProductSignal =
       document.querySelector(
         'meta[property="product:price:amount"], meta[property="og:price:amount"], meta[property="og:type"][content="product"]'
-      ) || extractFromJsonLd() !== null;
+      ) ||
+      extractFromJsonLd() !== null ||
+      hasProductMicrodata() ||
+      urlLooksLikeProduct();
 
     if (!hasProductSignal) return null;
 
@@ -205,32 +304,114 @@
     'adidas.com.mx': ADIDAS_CONFIG,
   };
 
-  const GENERIC_TOTAL_SELECTORS = [
-    '[class*="order-total"] [class*="amount"]',
-    '[class*="cart-total"] [class*="price"]',
+  // Selectors that point at the FINAL amount to pay (grand total). Checked first.
+  const FINAL_TOTAL_SELECTORS = [
+    '[class*="grand-total"] [class*="amount"]',
     '[class*="grand-total"]',
+    '[class*="order-total"] [class*="amount"]',
+    '[class*="order-total"]',
     '[class*="total-amount"]',
     '[class*="checkout-total"]',
+    '[class*="cart-total"] [class*="price"]',
+    '[class*="cart-total"]',
+    '[data-testid*="grand-total"]',
+    '[data-testid*="order-total"]',
+    '[id*="grand-total"]',
+    '[id*="order-total"]',
+  ];
+
+  // Weaker total signals (subtotal / anything "total"). Only used as a fallback.
+  const FALLBACK_TOTAL_SELECTORS = [
     '[class*="subtotal"]',
     '[id*="total"]',
   ];
 
-  function extractCartTotal() {
-    const config = CART_STORE_CONFIG[currentDomain];
-
-    const storeSels = config?.total
-      ? config.total.split(', ').map((s) => s.trim())
-      : [];
-
-    for (const sel of [...storeSels, ...GENERIC_TOTAL_SELECTORS]) {
+  function lastPriceFromSelectors(selectors) {
+    for (const sel of selectors) {
       const els = document.querySelectorAll(sel);
       if (!els.length) continue;
-      // Take the last match — grand total is always the last row in checkout summary sections
+      // Take the last match — the grand total is the last row in summary sections.
       const val = parsePriceValue(els[els.length - 1]?.textContent);
       if (val && val > 0) return val;
     }
+    return null;
+  }
 
-    // Last-resort pass 1: known price class names (Nike .formatted-price, Adidas Glass .gl-price__value)
+  // Only treat a string as a price if it actually carries a currency signal,
+  // so labels like "Total 3 artículos" don't get parsed as the number 3.
+  function priceWithCurrency(str) {
+    const s = String(str || '');
+    if (!/\$/.test(s) && !/\d[.,]\d{2}\b/.test(s)) return null;
+    return parsePriceValue(s);
+  }
+
+  // Rows that say "total" but are NOT the amount to pay (savings/discount lines).
+  const NON_PAYABLE_TOTAL = /(ahorr|saved|saving|descuento|discount|cup[oó]n|coupon)/i;
+
+  // Find the price on the row explicitly labeled "Total" (the discounted grand
+  // total), skipping "Subtotal" and savings rows. This is the value the customer
+  // actually pays, so it must win over max-price heuristics that pick the
+  // pre-discount amount. Returns the LAST such row — the grand total is normally
+  // the final line of the summary.
+  function extractTotalByLabel() {
+    const nodes = document.querySelectorAll(
+      'span, p, div, strong, b, dt, dd, th, td, li, h2, h3'
+    );
+    let found = null;
+
+    for (const el of nodes) {
+      if (el.closest('#kueski-banner')) continue;
+      if (el.children.length > 3) continue;
+
+      const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!text || text.length > 60) continue;
+
+      const lower = text.toLowerCase();
+      if (!/\btotal\b/.test(lower)) continue;
+      if (/sub\s*total/.test(lower) || NON_PAYABLE_TOTAL.test(lower)) continue;
+      if (!isNodeVisible(el)) continue;
+
+      // Price sits in the same element ("Total $749").
+      let value = priceWithCurrency(text);
+
+      // Label-only cell — the price is in the sibling cell or the parent row.
+      if (!value) value = priceWithCurrency(el.nextElementSibling?.textContent);
+      if (!value) {
+        const parent = el.parentElement;
+        if (parent && !/sub\s*total/i.test(parent.textContent || '')) {
+          value = priceWithCurrency(parent.textContent);
+        }
+      }
+
+      if (value) found = value;
+    }
+
+    return found;
+  }
+
+  function extractCartTotal() {
+    const config = CART_STORE_CONFIG[currentDomain];
+    const storeSels = config?.total
+      ? config.total.split(',').map((s) => s.trim()).filter(Boolean)
+      : [];
+
+    // 1) Store-specific total (most reliable).
+    const storeVal = lastPriceFromSelectors(storeSels);
+    if (storeVal) return storeVal;
+
+    // 2) Row explicitly labeled "Total" — the real (discounted) amount to pay.
+    const labelVal = extractTotalByLabel();
+    if (labelVal) return labelVal;
+
+    // 3) Generic "final amount to pay" selectors.
+    const finalVal = lastPriceFromSelectors(FINAL_TOTAL_SELECTORS);
+    if (finalVal) return finalVal;
+
+    // 4) Weaker total/subtotal selectors.
+    const fallbackVal = lastPriceFromSelectors(FALLBACK_TOTAL_SELECTORS);
+    if (fallbackVal) return fallbackVal;
+
+    // 5) Known price class names (Nike .formatted-price, Adidas Glass .gl-price__value).
     const knownPriceEls = [
       ...document.querySelectorAll('.formatted-price'),
       ...document.querySelectorAll('.gl-price__value, [class*="gl-price__value"]'),
@@ -245,7 +426,7 @@
       }
     }
 
-    // Last-resort pass 2: class-agnostic leaf scan.
+    // 6) Class-agnostic leaf scan.
     // Find every leaf element (no children) whose ENTIRE text content is a price string.
     // The cart grand total is always the largest such value on the cart page.
     const leafEls = document.querySelectorAll('span, strong, b, p, div');
@@ -265,17 +446,106 @@
     return null;
   }
 
-  function extractCartFromPage() {
+  // Generic cart item containers used when there's no store-specific config.
+  const GENERIC_ITEM_CONTAINERS = [
+    '[data-testid*="cart-item"]',
+    '[class*="cart-item"]',
+    '[class*="cartItem"]',
+    '[class*="line-item"]',
+    '[class*="lineItem"]',
+    '[class*="bag-item"]',
+    '[class*="basket-item"]',
+    '[class*="product-line"]',
+  ];
+
+  const CART_EMPTY_PATTERNS = [
+    'tu carrito está vacío', 'tu carrito esta vacio',
+    'carrito vacío', 'carrito vacio',
+    'tu bolsa está vacía', 'tu bolsa esta vacia',
+    'tu bolsa de la compra está vacía',
+    'no tienes productos', 'no hay productos en tu',
+    'your cart is empty', 'your bag is empty',
+    'your shopping cart is empty', 'shopping bag is empty',
+  ];
+
+  function isCartEmptyByText() {
+    const text = (document.body?.innerText || '').toLowerCase();
+    return CART_EMPTY_PATTERNS.some((p) => text.includes(p));
+  }
+
+  // Read the quantity for a single cart line item (e.g. "× 3"). Falls back to 1.
+  function getItemQuantity(container) {
+    // 1) Form controls (number input / qty select / stepper input).
+    const control = container.querySelector(
+      'input[type="number"], input[name*="quantity" i], input[name*="qty" i], ' +
+      'input[class*="quantity" i], input[data-testid*="quantity" i], ' +
+      'select[name*="quantity" i], select[name*="qty" i]'
+    );
+    if (control) {
+      const raw = control.value || control.getAttribute('value') ||
+        (control.selectedOptions && control.selectedOptions[0]?.textContent) || '';
+      const v = parseInt(String(raw).replace(/[^\d]/g, ''), 10);
+      if (v > 0 && v < 1000) return v;
+    }
+
+    // 2) Stepper widgets expose the value via aria attributes.
+    const spin = container.querySelector('[aria-valuenow], [role="spinbutton"]');
+    if (spin) {
+      const v = parseInt(spin.getAttribute('aria-valuenow') || spin.textContent, 10);
+      if (v > 0 && v < 1000) return v;
+    }
+
+    // 3) Elements explicitly tagged as quantity.
+    const qtyEl = container.querySelector(
+      '[data-testid*="quantity" i], [data-automation*="quantity" i], [class*="quantity" i], ' +
+      '[aria-label*="cantidad" i], [aria-label*="quantity" i]'
+    );
+    if (qtyEl) {
+      const source = qtyEl.getAttribute('aria-label') || qtyEl.value || qtyEl.textContent || '';
+      const m = source.match(/\d+/);
+      if (m) {
+        const v = parseInt(m[0], 10);
+        if (v > 0 && v < 1000) return v;
+      }
+    }
+
+    return 1;
+  }
+
+  // Total number of units in the cart (sums per-line quantities, not just line count).
+  function countCartItems() {
+    const config = CART_STORE_CONFIG[currentDomain];
+    const selectorSets = [];
+    if (config?.itemContainer) selectorSets.push(config.itemContainer);
+    selectorSets.push(...GENERIC_ITEM_CONTAINERS);
+
+    for (const sel of selectorSets) {
+      const els = Array.from(document.querySelectorAll(sel)).filter(isElementVisible);
+      if (els.length) {
+        return els.reduce((sum, el) => sum + getItemQuantity(el), 0);
+      }
+    }
+    return 0;
+  }
+
+  function extractCart() {
     if (!isCartPage()) return null;
 
+    const itemCount = countCartItems();
     const total = extractCartTotal();
+
+    // Empty cart: explicit empty message, or no items and no total found.
+    if (isCartEmptyByText() || (itemCount === 0 && !total)) {
+      return { empty: true, total: 0, itemCount: 0, domain: currentDomain, detectedAt: Date.now() };
+    }
+
     if (!total) return null;
 
-    return { total, domain: currentDomain, detectedAt: Date.now() };
+    return { total, itemCount, empty: false, domain: currentDomain, detectedAt: Date.now() };
   }
 
   function publishCartContext(cart) {
-    if (!cart?.total) return;
+    if (!cart) return;
     chrome.runtime.sendMessage({
       type: 'SET_CART_CONTEXT',
       domain: currentDomain,
@@ -284,7 +554,7 @@
   }
 
   function scanAndPublishCart() {
-    const cart = extractCartFromPage();
+    const cart = extractCart();
     if (cart) publishCartContext(cart);
     return cart;
   }

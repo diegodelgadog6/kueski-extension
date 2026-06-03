@@ -621,6 +621,7 @@ body {
   flex: 1;
   overflow-y: auto;
   max-height: calc(640px - 56px - 64px);
+  min-height: calc(640px - 56px - 64px);
   background: var(--kueski-bg);
 }
 

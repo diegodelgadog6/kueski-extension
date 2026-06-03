@@ -127,8 +127,8 @@
             <h3 id="home-product-name" class="home-product-name">Producto</h3>
             <p id="home-product-price" class="home-product-summary">$0.00</p>
             <p id="home-product-promo" class="home-product-promo"></p>
-            <button class="btn-primary home-product-pay-btn" data-action="open-checkout-from-product" data-feature="purchases" type="button">
-              Pagar con Kueski Pay
+            <button class="btn-primary home-product-pay-btn" data-action="open-checkout-from-product" data-checkout-mode="product" data-feature="purchases" type="button">
+              Pagar este producto
             </button>
             <button class="btn-save-favorite" data-action="save-favorite" type="button">
               <span class="material-symbols-outlined tiny">bookmark_add</span> Guardar en favoritos
@@ -138,14 +138,11 @@
           <div id="home-cart-context" class="home-cart-context hidden">
             <p class="home-product-label">CARRITO DETECTADO</p>
             <div class="home-cart-total-row">
-              <span>Total del carrito</span>
+              <span id="home-cart-count">Total del carrito</span>
               <strong id="home-cart-total">$0.00</strong>
             </div>
-            <button class="btn-primary home-cart-pay-btn" data-action="open-checkout-from-product" data-feature="purchases" type="button">
-              Pagar con Kueski Pay
-            </button>
-            <button class="btn-save-favorite" data-action="save-favorite" type="button">
-              <span class="material-symbols-outlined tiny">bookmark_add</span> Guardar en favoritos
+            <button class="btn-primary home-cart-pay-btn" data-action="open-checkout-from-product" data-checkout-mode="cart" data-feature="purchases" type="button">
+              Pagar carrito completo
             </button>
           </div>
 
@@ -897,7 +894,7 @@
           <div id="checkout-cart-detected" class="checkout-cart-card hidden">
             <p class="checkout-product-label">CARRITO DETECTADO</p>
             <div class="checkout-cart-total-row">
-              <span>Total del carrito</span>
+              <span id="checkout-cart-count">Total del carrito</span>
               <strong id="checkout-cart-total">$0.00</strong>
             </div>
             <p id="checkout-cart-promo" class="checkout-product-promo"></p>
