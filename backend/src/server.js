@@ -1061,10 +1061,9 @@ app.post('/api/transacciones', async (req, res) => {
       return res.status(404).json({ ok: false, error: 'Cuenta no encontrada' });
     }
     const cuenta = cuentaRes.rows[0];
-    if (parseFloat(cuenta.available_balance) < parseFloat(monto)) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ ok: false, error: 'Saldo insuficiente' });
-    }
+    // Una compra a quincenas consume crédito, no el efectivo del wallet:
+    // el saldo (available_balance) solo se descuenta al pagar cada quincena.
+    // El límite real lo valida la verificación de crédito (total > creditRemaining) más abajo.
     const planRes = await client.query(
       'SELECT * FROM payment_plans WHERE id = $1 AND active = TRUE', [plan_id]
     );
@@ -1121,12 +1120,9 @@ app.post('/api/transacciones', async (req, res) => {
         VALUES ($1,$2,$3, CURRENT_DATE + ($4 * INTERVAL '15 days'))
       `, [tx.id, i, per_inst.toFixed(2), i]);
     }
-    await client.query(`
-      UPDATE kueski_accounts
-      SET available_balance = available_balance - $1,
-          updated_at = NOW()
-      WHERE id = $2
-    `, [total.toFixed(2), cuenta.id]);
+    // No se descuenta el available_balance aquí: la compra solo sube la deuda
+    // (used_balance, vía syncAccountUsedBalance). El saldo del wallet baja únicamente
+    // al pagar cada quincena en /api/recordatorios/pagar, evitando el doble cobro.
     await syncAccountUsedBalance(client, cuenta.id);
     await client.query('COMMIT');
     res.status(201).json({
